@@ -127,20 +127,24 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
     <View style={[styles.wrapper, { paddingBottom }]}>
       {/* FAB — tengah sempurna, separuh timbul di atas bar */}
       <View style={styles.fabWrapper}>
-        <TouchableOpacity
-          onPress={() => router.push('/post/options' as any)}
-          activeOpacity={0.85}
-          style={styles.fabBtn}
-        >
-          <LinearGradient
-            colors={['#2DBFB8', '#1A7A72', '#0D5E57']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.fabGradient}
+        {/* fabShadow: hanya untuk shadow iOS — tidak overflow:hidden */}
+        <View style={styles.fabShadow}>
+          {/* fabBtn: overflow:hidden untuk clip gradient, shadow Android via elevation */}
+          <TouchableOpacity
+            onPress={() => router.push('/post/options' as any)}
+            activeOpacity={0.85}
+            style={styles.fabBtn}
           >
-            <Ionicons name="add" size={32} color="#FFFFFF" />
-          </LinearGradient>
-        </TouchableOpacity>
+            <LinearGradient
+              colors={['#2DBFB8', '#1A7A72', '#0D5E57']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.fabGradient}
+            >
+              <Ionicons name="add" size={32} color="#FFFFFF" />
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Bar */}
@@ -271,30 +275,34 @@ const styles = StyleSheet.create({
     left: SCREEN_WIDTH / 2 - 30,      // tepat tengah layar
     zIndex: 20,
   },
+  // Shadow wrapper — tanpa overflow:hidden agar shadow iOS tidak terpotong
+  fabShadow: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#0D5E57',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.5,
+        shadowRadius: 14,
+      },
+    }),
+  },
+  // Clip container — overflow:hidden untuk gradient + shadow Android
   fabBtn: {
     width: 60,
     height: 60,
     borderRadius: 30,
     overflow: 'hidden',
     ...Platform.select({
-      ios: {
-        shadowColor: '#0D5E57',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.45,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 14,
-      },
+      android: { elevation: 14 },
     }),
   },
   fabGradient: {
     width: 60,
     height: 60,
-    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2.5,
-    borderColor: 'rgba(255,255,255,0.25)',
   },
 });

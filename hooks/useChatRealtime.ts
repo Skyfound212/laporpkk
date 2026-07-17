@@ -97,14 +97,11 @@ export function useChatRealtime() {
       )
       .subscribe();
 
-    // Reconnect saat kembali ke foreground
-    const appStateSub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') sub.subscribe();
-    });
-
+    // Supabase realtime sudah auto-reconnect sendiri.
+    // Tidak perlu panggil sub.subscribe() lagi saat foreground —
+    // itu justru membuat duplikasi subscription.
     return () => {
       supabase.removeChannel(sub);
-      appStateSub.remove();
     };
   }, []);
 }
