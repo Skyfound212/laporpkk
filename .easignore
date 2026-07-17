@@ -17,5 +17,10 @@ attached_assets/
 # Supabase functions (tidak dipaket ke APK)
 supabase/functions/
 
+# Folder native hasil prebuild lokal — jangan ikut ke EAS archive
+# EAS Build akan generate ini sendiri via prebuild di cloud
+android/
+ios/
+
 # Tooling & CI yang tidak relevan untuk build
 .github/
