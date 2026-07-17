@@ -6,3 +6,8 @@ externalPort = 80
 
 [agent]
 expertMode = true
+
+[userenv]
+
+[userenv.shared]
+CLII_SETUP_COMMAND = "supabase login supabase init supabase link --project-ref epxzzjarefvyerwuipkq"
