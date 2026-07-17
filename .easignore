@@ -1,0 +1,21 @@
+# File dokumentasi dan log Replit — tidak diperlukan untuk EAS build
+README.md
+REPLIT_LOG.md
+REPLIT_ONBOARDING.md
+CHECKPOINT.md
+CHECKPOINT_PROTOCOL.md
+BUILD_LOG.md
+SQL_LOG.md
+CHECKLIST.md
+
+# Direktori Replit internal
+.cursor/
+.local/
+.cache/
+attached_assets/
+
+# Supabase functions (tidak dipaket ke APK)
+supabase/functions/
+
+# Tooling & CI yang tidak relevan untuk build
+.github/

@@ -1,11 +1,13 @@
 {
   "cli": {
-    "version": ">= 7.0.0"
+    "version": ">= 7.0.0",
+    "appVersionSource": "local"
   },
   "build": {
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "resourceClass": "medium",
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://epxzzjarefvyerwuipkq.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVweHp6amFyZWZ2eWVyd3VpcGtxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyMzQ5MzksImV4cCI6MjA5OTgxMDkzOX0.wQhVjc5YX8QQmyuguBYSseQLKjhTEea9vhhfqovOF6o"
@@ -13,25 +15,26 @@
     },
     "preview": {
       "distribution": "internal",
+      "resourceClass": "medium",
       "android": {
         "buildType": "apk"
       },
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://epxzzjarefvyerwuipkq.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVweHp6amFyZWZ2eWVyd3VpcGtxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyMzQ5MzksImV4cCI6MjA5OTgxMDkzOX0.wQhVjc5YX8QQmyuguBYSseQLKjhTEea9vhhfqovOF6o",
-        "EAS_BUILD_SKIP_LOCKFILE_CHECK": "1"
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVweHp6amFyZWZ2eWVyd3VpcGtxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyMzQ5MzksImV4cCI6MjA5OTgxMDkzOX0.wQhVjc5YX8QQmyuguBYSseQLKjhTEea9vhhfqovOF6o"
       },
       "channel": "preview"
     },
     "production": {
+      "autoIncrement": true,
+      "resourceClass": "medium",
       "android": {
         "buildType": "app-bundle",
         "gradleCommand": ":app:bundleRelease"
       },
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://epxzzjarefvyerwuipkq.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVweHp6amFyZWZ2eWVyd3VpcGtxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyMzQ5MzksImV4cCI6MjA5OTgxMDkzOX0.wQhVjc5YX8QQmyuguBYSseQLKjhTEea9vhhfqovOF6o",
-        "EAS_BUILD_SKIP_LOCKFILE_CHECK": "1"
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVweHp6amFyZWZ2eWVyd3VpcGtxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyMzQ5MzksImV4cCI6MjA5OTgxMDkzOX0.wQhVjc5YX8QQmyuguBYSseQLKjhTEea9vhhfqovOF6o"
       },
       "channel": "production"
     }

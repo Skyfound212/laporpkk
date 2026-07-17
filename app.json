@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "PKK Digital",
-    "slug": "pkk-digital",
+    "slug": "laporpkk",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -30,6 +30,7 @@
         "backgroundColor": "#7ECDC0"
       },
       "package": "com.pkk212.digital",
+      "versionCode": 1,
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.CAMERA",
