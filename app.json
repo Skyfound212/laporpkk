@@ -67,6 +67,14 @@
         }
       ],
       [
+        "expo-media-library",
+        {
+          "photosPermission": "Aplikasi memerlukan akses galeri untuk memilih foto.",
+          "savePhotosPermission": "Aplikasi memerlukan akses untuk menyimpan foto.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ],
+      [
         "expo-document-picker",
         {
           "iCloudContainerEnvironment": "Production"
@@ -96,10 +104,7 @@
     "updates": {
       "url": "https://u.expo.dev/d1e40f88-72f7-4d24-bf0f-d6041b48d0ae",
       "enabled": true,
-      "checkAutomatically": "ON_LOAD",
-      "requestHeaders": {
-        "expo-channel-name": "preview"
-      }
+      "checkAutomatically": "ON_LOAD"
     },
     "runtimeVersion": {
       "policy": "sdkVersion"

@@ -51,7 +51,7 @@ export function useChatRealtime() {
           incrementUnread(roomId);
 
           // Fetch nama pengirim — gunakan cache agar tidak query berulang
-          let senderName = senderNameCache.current.get(senderId);
+          let senderName: string = senderNameCache.current.get(senderId) ?? '';
           if (!senderName) {
             try {
               const { data: profile } = await supabase

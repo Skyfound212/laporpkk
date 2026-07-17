@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { supabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -60,7 +61,7 @@ export default function PengaturanScreen() {
     setSavingPassword(true);
     try {
       // Verifikasi password lama dulu
-      const { data: profile } = await (await import('@/lib/supabase')).supabase
+      const { data: profile } = await supabase
         .from('profiles')
         .select('id')
         .eq('id', user?.id)
