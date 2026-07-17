@@ -65,17 +65,7 @@ function NetworkBanner() {
 }
 
 // ─── OTA Update Banner ────────────────────────────────────────────────────────
-//
-// Flow yang benar:
-//   1. Cek update di background (tidak blokir launch)
-//   2. Kalau ada → download diam-diam
-//   3. Tampilkan banner "Update siap" — user yang memilih kapan restart
-//   4. Tap banner → reloadAsync()
-//
-// Kenapa TIDAK pakai checkAutomatically:"ON_LOAD" sekaligus kode ini?
-// → Akan ada dua pemanggi reloadAsync() secara bersamaan → crash / reload loop.
-// → app.json sudah di-set checkAutomatically:"ERROR_RECOVERY_ONLY" supaya
-//   hanya kode ini yang mengontrol siklus update.
+// FIX: Hanya aktif di production, tidak conflict dengan app.json
 
 type UpdateState = 'idle' | 'downloading' | 'ready' | 'error';
 
@@ -83,7 +73,7 @@ function useOTAUpdate() {
   const [state, setState] = useState<UpdateState>('idle');
 
   useEffect(() => {
-    // Tidak cek di mode dev — expo-updates tidak aktif di sana
+    // Skip di development
     if (__DEV__) return;
 
     let cancelled = false;
@@ -98,7 +88,6 @@ function useOTAUpdate() {
 
         if (!cancelled) setState('ready');
       } catch {
-        // Offline / server error → abaikan dengan diam
         if (!cancelled) setState('idle');
       }
     })();
@@ -163,6 +152,7 @@ export default function RootLayout() {
               animation: 'slide_from_right',
             }}
           >
+            <Stack.Screen name="index"      options={{ animation: 'fade' }} />
             <Stack.Screen name="(auth)"     options={{ animation: 'fade' }} />
             <Stack.Screen name="(tabs)"     options={{ animation: 'fade' }} />
             <Stack.Screen name="post"       options={{ animation: 'slide_from_bottom' }} />
@@ -184,14 +174,12 @@ export default function RootLayout() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  // Error boundary
   errContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: '#fff' },
   errTitle:     { fontSize: 20, fontWeight: 'bold', color: '#2D3436', marginTop: 16 },
   errMsg:       { fontSize: 14, color: '#636E72', textAlign: 'center', marginTop: 8, marginBottom: 24, lineHeight: 20 },
   errBtn:       { backgroundColor: '#7ECDC0', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },
   errBtnText:   { color: '#fff', fontWeight: '600', fontSize: 16 },
 
-  // Offline banner
   offlineBanner: {
     backgroundColor: '#FF6B6B',
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
@@ -199,7 +187,6 @@ const styles = StyleSheet.create({
   },
   offlineText: { color: '#fff', fontSize: 12, fontWeight: '600' },
 
-  // Update banner — slide turun dari atas
   updateBanner: {
     backgroundColor: '#2E9F95',
     flexDirection: 'row', alignItems: 'center',
