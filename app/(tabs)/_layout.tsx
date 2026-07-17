@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Dimensions } from 'react-native';
 import { Tabs, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
@@ -122,14 +125,23 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 
   return (
     <View style={[styles.wrapper, { paddingBottom }]}>
-      {/* FAB — tengah, sebagian timbul di atas bar */}
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => router.push('/post/options' as any)}
-        activeOpacity={0.85}
-      >
-        <Ionicons name="add" size={30} color="#FFFFFF" />
-      </TouchableOpacity>
+      {/* FAB — tengah sempurna, separuh timbul di atas bar */}
+      <View style={styles.fabWrapper}>
+        <TouchableOpacity
+          onPress={() => router.push('/post/options' as any)}
+          activeOpacity={0.85}
+          style={styles.fabBtn}
+        >
+          <LinearGradient
+            colors={['#2DBFB8', '#1A7A72', '#0D5E57']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.fabGradient}
+          >
+            <Ionicons name="add" size={32} color="#FFFFFF" />
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
 
       {/* Bar */}
       <View style={styles.bar}>
@@ -252,32 +264,37 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  // FAB center
-  fab: {
+  // FAB — wrapper untuk centering yang akurat
+  fabWrapper: {
     position: 'absolute',
-    top: -28,
-    alignSelf: 'center',
-    left: 0,
-    right: 0,
-    marginHorizontal: 'auto',
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: C.fabBg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 10,
-    alignSelf: 'center',
+    top: -30,                          // separuh FAB (60/2) timbul di atas bar
+    left: SCREEN_WIDTH / 2 - 30,      // tepat tengah layar
+    zIndex: 20,
+  },
+  fabBtn: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: C.fabBg,
-        shadowOffset: { width: 0, height: 4 },
+        shadowColor: '#0D5E57',
+        shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.45,
-        shadowRadius: 10,
+        shadowRadius: 12,
       },
       android: {
-        elevation: 12,
+        elevation: 14,
       },
     }),
+  },
+  fabGradient: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2.5,
+    borderColor: 'rgba(255,255,255,0.25)',
   },
 });
