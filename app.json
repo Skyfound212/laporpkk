@@ -96,7 +96,7 @@
     "updates": {
       "url": "https://u.expo.dev/d1e40f88-72f7-4d24-bf0f-d6041b48d0ae",
       "enabled": true,
-      "checkAutomatically": "ERROR_RECOVERY_ONLY",
+      "checkAutomatically": "ON_LOAD",
       "requestHeaders": {
         "expo-channel-name": "preview"
       }
