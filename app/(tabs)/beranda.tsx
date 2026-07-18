@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,15 +10,18 @@ import {
   Image,
   Dimensions,
   ActivityIndicator,
+  StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase';
 
-// ─── Tipe ──────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Tipe Data
+// ═══════════════════════════════════════════════════════════════════════════════
 
 interface PostItem {
   id: string;
@@ -28,7 +31,12 @@ interface PostItem {
   images?: string[];
   created_at: string;
   likes_count: number;
-  user: { id: string; nama: string; jabatan: string };
+  user: {
+    id: string;
+    nama: string;
+    jabatan: string;
+    avatar_url?: string;
+  };
 }
 
 interface StoryItem {
@@ -49,42 +57,58 @@ interface AgendaItem {
   status: string;
 }
 
-// ─── Konstanta ─────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Konstanta & Warna
+// ═══════════════════════════════════════════════════════════════════════════════
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_W } = Dimensions.get('window');
 
 const C = {
-  // Teal utama
+  // ── Primary Teal ──
   primary:    '#3DBFB8',
+  primaryLight:'#D6F2F0',
   dark:       '#1A7A72',
   darker:     '#0D5E57',
-  light:      '#D6F2F0',
-  // Background
+  darkest:    '#0A4A44',
+  // ── Background ──
   bg:         '#F0F6F6',
-  card:       '#FFFFFF',
-  // Teks
+  surface:    '#FFFFFF',
+  surfaceAlt: '#F8FBFB',
+  // ── Text ──
   textMain:   '#111827',
   textSub:    '#4B5563',
   textMuted:  '#9CA3AF',
+  textInverse:'#FFFFFF',
+  // ── Border & Divider ──
   border:     '#E2EEEC',
-  // Aksen emas — kesan eksklusif/resmi
+  divider:    '#EDF4F3',
+  // ── Gold Accent ──
   gold:       '#C9A84C',
   goldLight:  '#FBF0D8',
+  goldDark:   '#A88A3D',
+  // ── Status ──
+  success:    '#22C55E',
+  warning:    '#F59E0B',
+  danger:     '#EF4444',
 };
-
-// ─── Gradients ─────────────────────────────────────────────────────────────────
 
 const G = {
-  header:    ['#0D5E57', '#1A7A72', '#2E9F95'] as const,
-  liveCard:  ['#0A5E57', '#1A8578', '#2BAF9E'] as const,
-  avatar:    ['#3DBFB8', '#1A7A72'] as const,
-  avatarSelf:['#0D5E57', '#1A7A72'] as const,
-  aksiIcon:  ['#D6F2F0', '#B2E6E2'] as const,
+  header:      ['#0D5E57', '#1A7A72', '#2E9F95'] as const,
+  headerSoft:  ['#1A7A72', '#2E9F95', '#3DBFB8'] as const,
+  liveCard:    ['#0A5E57', '#1A8578', '#2BAF9E'] as const,
+  liveCardAlt: ['#1A7A72', '#2E9F95', '#3DBFB8'] as const,
+  avatar:      ['#3DBFB8', '#1A7A72'] as const,
+  avatarSelf:  ['#0D5E57', '#1A7A72'] as const,
+  aksiIcon:    ['#D6F2F0', '#B2E6E2'] as const,
   storyOnline: ['#22C55E', '#16A34A'] as const,
   storyRing:   ['#3DBFB8', '#1A7A72'] as const,
+  goldRing:    ['#C9A84C', '#E8C26A'] as const,
+  shimmer:     ['#E2EEEC', '#F0F6F6', '#E2EEEC'] as const,
 };
 
-// ─── Utilitas ──────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Utilitas
+// ═══════════════════════════════════════════════════════════════════════════════
 
 function getGreeting(hour: number): string {
   if (hour < 11) return 'Selamat Pagi';
@@ -116,7 +140,8 @@ function formatRelativeDate(dateString: string): string {
 }
 
 function formatAgendaDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('id-ID', {
+  const d = new Date(dateString);
+  return d.toLocaleDateString('id-ID', {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
@@ -128,36 +153,134 @@ function formatAgendaDate(dateString: string): string {
 function getInitials(name: string): string {
   return name
     .split(' ')
+    .filter(w => w.length > 0)
     .slice(0, 2)
-    .map((w) => w.charAt(0).toUpperCase())
+    .map(w => w.charAt(0).toUpperCase())
     .join('');
 }
 
-// ─── Screen ────────────────────────────────────────────────────────────────────
+function getCategoryColor(category: string): string {
+  const map: Record<string, string> = {
+    'Kegiatan': '#3DBFB8',
+    'Laporan':  '#F59E0B',
+    'Pengumuman':'#EF4444',
+    'Agenda':   '#8B5CF6',
+    'Dokumentasi':'#10B981',
+    'default':  '#3DBFB8',
+  };
+  return map[category] || map['default'];
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Komponen Bantu
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Avatar dengan foto atau inisial fallback */
+function Avatar({
+  uri,
+  name,
+  size = 42,
+  gradient = G.avatar,
+  borderWidth = 0,
+  borderColor = 'transparent',
+}: {
+  uri?: string;
+  name: string;
+  size?: number;
+  gradient?: readonly [string, string, ...string[]];
+  borderWidth?: number;
+  borderColor?: string;
+}) {
+  const fontSize = size * 0.38;
+  return (
+    <View style={[avatarStyles.container, { width: size, height: size, borderRadius: size * 0.3, borderWidth, borderColor }]}>
+      {uri ? (
+        <Image source={{ uri }} style={[avatarStyles.image, { width: size, height: size, borderRadius: size * 0.3 }]} />
+      ) : (
+        <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[avatarStyles.gradient, { width: size, height: size, borderRadius: size * 0.3 }]}>
+          <Text style={[avatarStyles.text, { fontSize }]}>{getInitials(name)}</Text>
+        </LinearGradient>
+      )}
+    </View>
+  );
+}
+
+const avatarStyles = StyleSheet.create({
+  container: { overflow: 'hidden' },
+  image: { resizeMode: 'cover' },
+  gradient: { alignItems: 'center', justifyContent: 'center' },
+  text: { fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5 },
+});
+
+/** Badge notifikasi merah */
+function NotifBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <View style={styles.notifBadge}>
+      <Text style={styles.notifBadgeText}>{count > 99 ? '99+' : String(count)}</Text>
+    </View>
+  );
+}
+
+/** Section title dengan accent bar emas */
+function SectionTitle({ title, icon }: { title: string; icon?: string }) {
+  return (
+    <View style={styles.sectionTitleRow}>
+      <View style={styles.sectionAccentBar} />
+      {icon && <Ionicons name={icon as any} size={16} color={C.gold} />}
+      <Text style={styles.sectionTitle}>{title}</Text>
+    </View>
+  );
+}
+
+/** Shimmer placeholder untuk loading */
+function ShimmerCard() {
+  return (
+    <View style={styles.shimmerCard}>
+      <View style={styles.shimmerLine} />
+      <View style={[styles.shimmerLine, { width: '60%', marginTop: 8 }]} />
+      <View style={[styles.shimmerLine, { width: '40%', marginTop: 8, height: 120, borderRadius: 12 }]} />
+    </View>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Screen Utama
+// ═══════════════════════════════════════════════════════════════════════════════
 
 export default function BerandaScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
 
-  const [posts,       setPosts]       = useState<PostItem[]>([]);
-  const [stories,     setStories]     = useState<StoryItem[]>([]);
-  const [liveEvent,   setLiveEvent]   = useState<AgendaItem | null>(null);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [loading,     setLoading]     = useState(true);
-  const [refreshing,  setRefreshing]  = useState(false);
-  const [currentTime, setCurrentTime] = useState(new Date());
+  // ── State ───────────────────────────────────────────────────────────────────
+  const [posts,         setPosts]         = useState<PostItem[]>([]);
+  const [stories,       setStories]       = useState<StoryItem[]>([]);
+  const [liveEvent,     setLiveEvent]     = useState<AgendaItem | null>(null);
+  const [unreadCount,   setUnreadCount]   = useState(0);
+  const [loading,       setLoading]       = useState(true);
+  const [refreshing,    setRefreshing]    = useState(false);
+  const [currentTime,   setCurrentTime]   = useState(new Date());
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
+  const [error,         setError]         = useState<string | null>(null);
 
-  // Jam berjalan setiap menit
+  // ── Derived values ────────────────────────────────────────────────────────────
+  const hour      = currentTime.getHours();
+  const greeting  = useMemo(() => getGreeting(hour), [hour]);
+  const greetIcon = useMemo(() => getGreetingIcon(hour), [hour]);
+  const firstName = useMemo(() => user?.nama?.split(' ')[0] ?? 'Anggota', [user?.nama]);
+
+  // ── Timer jam berjalan ──────────────────────────────────────────────────────
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
 
   // ── Fetch semua data ────────────────────────────────────────────────────────
-
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (isRefresh = false) => {
     if (!user?.id) return;
+    if (!isRefresh) setLoading(true);
+    setError(null);
+
     try {
       await Promise.all([
         fetchPosts(),
@@ -165,8 +288,9 @@ export default function BerandaScreen() {
         fetchLiveEvent(),
         fetchUnreadCount(),
       ]);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching beranda:', err);
+      setError(err?.message ?? 'Gagal memuat data');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -176,16 +300,28 @@ export default function BerandaScreen() {
   const fetchPosts = async () => {
     const { data, error } = await supabase
       .from('posts')
-      .select('id, content, category, type, images, created_at, likes_count, user:profiles(id, nama, jabatan)')
+      .select(`
+        id, content, category, type, images, created_at, likes_count,
+        user:profiles(id, nama, jabatan, avatar_url)
+      `)
       .eq('status', 'published')
       .order('created_at', { ascending: false })
       .limit(20);
 
     if (error) throw error;
+
     setPosts(
       (data ?? []).map((item: any) => {
         const u = Array.isArray(item.user) ? item.user[0] : item.user;
-        return { ...item, user: { id: u?.id || '', nama: u?.nama || 'Anggota PKK', jabatan: u?.jabatan || 'Anggota' } };
+        return {
+          ...item,
+          user: {
+            id: u?.id || '',
+            nama: u?.nama || 'Anggota PKK',
+            jabatan: u?.jabatan || 'Anggota',
+            avatar_url: u?.avatar_url,
+          },
+        };
       })
     );
   };
@@ -194,40 +330,48 @@ export default function BerandaScreen() {
     const { data, error } = await supabase
       .from('profiles')
       .select('id, nama, jabatan, avatar_url')
-      .neq('id', user?.id)   // exclude diri sendiri — tampil sebagai "Anda" di kiri
+      .neq('id', user?.id)
       .limit(12);
 
     if (error) throw error;
-    setStories((data ?? []).map((u: any) => ({
-      id: u.id,
-      nama: u.nama,
-      jabatan: u.jabatan,
-      user_id: u.id,
-      avatar_url: u.avatar_url ?? undefined,
-    })));
+
+    setStories(
+      (data ?? []).map((u: any) => ({
+        id: u.id,
+        nama: u.nama,
+        jabatan: u.jabatan,
+        user_id: u.id,
+        avatar_url: u.avatar_url ?? undefined,
+      }))
+    );
   };
 
   const fetchLiveEvent = async () => {
+    const now = new Date().toISOString();
+
+    // Cari agenda yang sedang berlangsung
     const { data: ongoing } = await supabase
       .from('agenda')
       .select('id, title, location, start_date, end_date, status')
-      .eq('status', 'ongoing')
+      .lte('start_date', now)
+      .gte('end_date', now)
       .order('start_date', { ascending: true })
       .limit(1);
 
     if (ongoing && ongoing.length > 0) {
-      setLiveEvent(ongoing[0] as AgendaItem);
+      setLiveEvent({ ...ongoing[0], status: 'ongoing' } as AgendaItem);
       return;
     }
 
+    // Kalau tidak, cari yang akan datang
     const { data: upcoming } = await supabase
       .from('agenda')
       .select('id, title, location, start_date, end_date, status')
-      .eq('status', 'upcoming')
+      .gt('start_date', now)
       .order('start_date', { ascending: true })
       .limit(1);
 
-    setLiveEvent(upcoming?.[0] ?? null);
+    setLiveEvent(upcoming?.[0] ? { ...upcoming[0], status: 'upcoming' } as AgendaItem : null);
   };
 
   const fetchUnreadCount = async () => {
@@ -241,12 +385,10 @@ export default function BerandaScreen() {
     if (!error) setUnreadCount(count ?? 0);
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  // Initial fetch
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  // ── Real-time badge notif ───────────────────────────────────────────────────
-
+  // ── Real-time: Notifikasi badge ─────────────────────────────────────────────
   useEffect(() => {
     if (!user?.id) return;
 
@@ -255,15 +397,14 @@ export default function BerandaScreen() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
-        () => { fetchUnreadCount(); }
+        () => fetchUnreadCount()
       )
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
   }, [user?.id]);
 
-  // ── Realtime Presence ────────────────────────────────────────────────────────
-
+  // ── Real-time: Online presence ──────────────────────────────────────────────
   useEffect(() => {
     if (!user?.id) return;
 
@@ -278,23 +419,18 @@ export default function BerandaScreen() {
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
-          await presenceChannel.track({ user_id: user.id, online_at: new Date().toISOString() });
+          await presenceChannel.track({
+            user_id: user.id,
+            online_at: new Date().toISOString(),
+          });
         }
       });
 
     return () => { supabase.removeChannel(presenceChannel); };
   }, [user?.id]);
 
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  const hour      = currentTime.getHours();
-  const greeting  = getGreeting(hour);
-  const greetIcon = getGreetingIcon(hour);
-  const firstName = user?.nama?.split(' ')[0] ?? 'Anggota';
-
-  // ── Render story ─────────────────────────────────────────────────────────────
-
-  const renderStory = ({ item }: { item: StoryItem }) => {
+  // ── Render: Story item ──────────────────────────────────────────────────────
+  const renderStory = useCallback(({ item }: { item: StoryItem }) => {
     const isOnline = onlineUserIds.has(item.user_id);
     return (
       <TouchableOpacity
@@ -302,107 +438,142 @@ export default function BerandaScreen() {
         style={styles.storyItem}
         activeOpacity={0.8}
       >
-        {/* Gradient ring — teal biasa atau hijau jika online */}
         <LinearGradient
           colors={isOnline ? G.storyOnline : G.storyRing}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.storyGradientRing}
+          style={styles.storyRing}
         >
-          {item.avatar_url ? (
-            <Image
-              source={{ uri: item.avatar_url }}
-              style={styles.storyAvatar}
-            />
-          ) : (
-            <LinearGradient
-              colors={G.avatar}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.storyAvatar}
-            >
-              <Text style={styles.storyAvatarText}>{getInitials(item.nama)}</Text>
-            </LinearGradient>
-          )}
+          <Avatar
+            uri={item.avatar_url}
+            name={item.nama}
+            size={58}
+            gradient={G.avatar}
+            borderWidth={2}
+            borderColor={C.bg}
+          />
         </LinearGradient>
 
-        {/* Titik indikator online */}
         {isOnline && <View style={styles.onlineDot} />}
 
-        <Text style={styles.storyName} numberOfLines={1}>
-          {item.nama.split(' ')[0]}
-        </Text>
-        <Text style={[styles.storyStatus, { color: isOnline ? '#22C55E' : '#B2BEC3' }]}>
+        <Text style={styles.storyName} numberOfLines={1}>{item.nama.split(' ')[0]}</Text>
+        <Text style={[styles.storyStatus, { color: isOnline ? C.success : C.textMuted }]}>
           {isOnline ? 'online' : 'offline'}
         </Text>
       </TouchableOpacity>
     );
-  };
+  }, [onlineUserIds, router]);
 
-  // ── Render post ──────────────────────────────────────────────────────────────
-
-  const renderPost = ({ item }: { item: PostItem }) => (
+  // ── Render: Story "Anda" (header list) ──────────────────────────────────────
+  const renderSelfStory = useCallback(() => (
     <TouchableOpacity
-      activeOpacity={0.95}
-      onPress={() => router.push({ pathname: '/post/detail', params: { id: item.id } } as any)}
-      style={styles.postCard}
+      onPress={() => router.push('/profile')}
+      style={styles.storyItem}
+      activeOpacity={0.8}
     >
-      {/* Garis aksen kiri */}
-      <View style={styles.postAccentBar} />
-
-      {/* Author */}
-      <TouchableOpacity
-        onPress={() => router.push({ pathname: '/profile/other', params: { id: item.user.id } })}
-        style={styles.postAuthorRow}
-        activeOpacity={0.7}
+      <LinearGradient
+        colors={G.goldRing}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.storyRing}
       >
-        <LinearGradient
-          colors={G.avatar}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.postAvatar}
-        >
-          <Text style={styles.postAvatarText}>{getInitials(item.user.nama)}</Text>
-        </LinearGradient>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.postAuthorName}>{item.user.nama}</Text>
-          <Text style={styles.postAuthorJob}>{item.user.jabatan}</Text>
-        </View>
-        <Text style={styles.postTime}>{formatRelativeDate(item.created_at)}</Text>
-      </TouchableOpacity>
-
-      {/* Badge kategori */}
-      <View style={styles.categoryBadge}>
-        <View style={styles.categoryDot} />
-        <Text style={styles.categoryText}>{item.category}</Text>
-      </View>
-
-      {/* Konten */}
-      <Text style={styles.postContent} numberOfLines={3}>{item.content}</Text>
-
-      {/* Foto dokumentasi */}
-      {item.images && item.images.length > 0 && (
-        <Image
-          source={{ uri: item.images[0] }}
-          style={styles.postImage}
-          resizeMode="cover"
+        <Avatar
+          uri={user?.avatar_url}
+          name={user?.nama ?? '?'}
+          size={58}
+          gradient={G.avatarSelf}
+          borderWidth={2}
+          borderColor={C.bg}
         />
-      )}
-
-      {/* Like */}
-      <View style={styles.postFooter}>
-        <Ionicons name="heart-outline" size={16} color={C.primary} />
-        <Text style={styles.postLikeText}>{item.likes_count} Suka</Text>
-      </View>
+      </LinearGradient>
+      <Text style={[styles.storyName, { color: C.gold, fontWeight: '700' }]}>Anda</Text>
     </TouchableOpacity>
-  );
+  ), [user, router]);
 
-  // ── Loading state ────────────────────────────────────────────────────────────
+  // ── Render: Post card ───────────────────────────────────────────────────────
+  const renderPost = useCallback(({ item }: { item: PostItem }) => {
+    const catColor = getCategoryColor(item.category);
+    return (
+      <TouchableOpacity
+        activeOpacity={0.95}
+        onPress={() => router.push({ pathname: '/post/detail', params: { id: item.id } } as any)}
+        style={styles.postCard}
+      >
+        {/* Aksen kiri */}
+        <View style={[styles.postAccentBar, { backgroundColor: catColor }]} />
 
-  if (loading) {
+        {/* Author */}
+        <TouchableOpacity
+          onPress={() => router.push({ pathname: '/profile/other', params: { id: item.user.id } })}
+          style={styles.postAuthorRow}
+          activeOpacity={0.7}
+        >
+          <Avatar uri={item.user.avatar_url} name={item.user.nama} size={40} />
+          <View style={styles.postAuthorInfo}>
+            <Text style={styles.postAuthorName}>{item.user.nama}</Text>
+            <Text style={styles.postAuthorJob}>{item.user.jabatan}</Text>
+          </View>
+          <Text style={styles.postTime}>{formatRelativeDate(item.created_at)}</Text>
+        </TouchableOpacity>
+
+        {/* Kategori badge */}
+        <View style={[styles.categoryBadge, { backgroundColor: catColor + '15' }]}>
+          <View style={[styles.categoryDot, { backgroundColor: catColor }]} />
+          <Text style={[styles.categoryText, { color: catColor }]}>{item.category}</Text>
+        </View>
+
+        {/* Konten */}
+        <Text style={styles.postContent} numberOfLines={3}>{item.content}</Text>
+
+        {/* Gambar */}
+        {item.images && item.images.length > 0 && (
+          <Image source={{ uri: item.images[0] }} style={styles.postImage} resizeMode="cover" />
+        )}
+
+        {/* Footer: like + komentar placeholder */}
+        <View style={styles.postFooter}>
+          <View style={styles.postFooterItem}>
+            <Ionicons name="heart-outline" size={16} color={C.primary} />
+            <Text style={styles.postFooterText}>{item.likes_count} Suka</Text>
+          </View>
+          <View style={styles.postFooterItem}>
+            <Ionicons name="chatbubble-outline" size={15} color={C.textMuted} />
+            <Text style={[styles.postFooterText, { color: C.textMuted }]}>Komentar</Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  }, [router]);
+
+  // ── Render: Aksi cepat item ─────────────────────────────────────────────────
+  const AksiItem = useCallback(({
+    icon,
+    label,
+    onPress,
+    color = C.dark,
+  }: {
+    icon: string;
+    label: string;
+    onPress: () => void;
+    color?: string;
+  }) => (
+    <TouchableOpacity style={styles.aksiCard} onPress={onPress} activeOpacity={0.82}>
+      <LinearGradient colors={G.aksiIcon} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.aksiIconBg}>
+        <Ionicons name={icon as any} size={22} color={color} />
+      </LinearGradient>
+      <Text style={styles.aksiLabel}>{label}</Text>
+    </TouchableOpacity>
+  ), []);
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  //  Loading State
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  if (loading && !refreshing) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <LinearGradient colors={G.header} style={styles.loadingGradient}>
+        <StatusBar barStyle="light-content" backgroundColor={C.darker} />
+        <LinearGradient colors={G.header} style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#FFFFFF" />
           <Text style={styles.loadingText}>Memuat beranda...</Text>
         </LinearGradient>
@@ -410,181 +581,105 @@ export default function BerandaScreen() {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════════
+  //  Main Render
+  // ═══════════════════════════════════════════════════════════════════════════════
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <StatusBar barStyle="light-content" backgroundColor={C.darker} />
 
-      {/* ── Header Gradient ──────────────────────────────────────────────────── */}
-      <LinearGradient
-        colors={G.header}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.header}
-      >
-        {/* Dekorasi lingkaran di latar */}
-        <View style={styles.headerDecorCircle1} />
-        <View style={styles.headerDecorCircle2} />
-
-        {/* Kiri: Badge PKK + Sapaan + Nama */}
-        <View style={{ flex: 1 }}>
-          <View style={styles.pkkBadge}>
-            <Text style={styles.pkkBadgeText}>PKK DIGITAL</Text>
-          </View>
-          <Text style={styles.headerGreeting}>{greetIcon}  {greeting}</Text>
-          <Text style={styles.headerName} numberOfLines={1}>{firstName}</Text>
-          <View style={styles.jabatanBadge}>
-            <Text style={styles.jabatanText}>{user?.jabatan ?? 'Anggota PKK'}</Text>
-          </View>
-        </View>
-
-        {/* Kanan: Jam + Tanggal + Notif */}
-        <View style={styles.headerRight}>
-          <Text style={styles.headerTime}>
-            {currentTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-          </Text>
-          <Text style={styles.headerDate}>
-            {currentTime.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })}
-          </Text>
-          <TouchableOpacity
-            style={styles.notifBtn}
-            onPress={() => router.push('/notifikasi' as any)}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="notifications" size={20} color={C.dark} />
-            {unreadCount > 0 && (
-              <View style={styles.notifBadge}>
-                <Text style={styles.notifBadgeText}>
-                  {unreadCount > 99 ? '99+' : String(unreadCount)}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
-
-      {/* ── Scrollable content ─────────────────────────────────────────────── */}
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => { setRefreshing(true); fetchData(); }}
+            onRefresh={() => { setRefreshing(true); fetchData(true); }}
             colors={[C.dark]}
             tintColor={C.dark}
+            progressBackgroundColor="#FFFFFF"
           />
         }
-        contentContainerStyle={{ paddingBottom: 130 }}
+        contentContainerStyle={styles.scrollContent}
       >
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/*  HEADER                                                          */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        <LinearGradient colors={G.header} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
+          {/* Dekorasi lingkaran */}
+          <View style={styles.headerDecorCircle1} />
+          <View style={styles.headerDecorCircle2} />
 
-        {/* ── Stories (Anggota Aktif) ──────────────────────────────────────── */}
+          {/* Kiri: Info user */}
+          <View style={styles.headerLeft}>
+            <View style={styles.pkkBadge}>
+              <FontAwesome5 name="users" size={9} color={C.goldLight} />
+              <Text style={styles.pkkBadgeText}> PKK DIGITAL</Text>
+            </View>
+            <Text style={styles.headerGreeting}>{greetIcon}  {greeting}</Text>
+            <Text style={styles.headerName} numberOfLines={1}>{firstName}</Text>
+            <View style={styles.jabatanBadge}>
+              <Text style={styles.jabatanText}>{user?.jabatan ?? 'Anggota PKK'}</Text>
+            </View>
+          </View>
+
+          {/* Kanan: Jam + Notif */}
+          <View style={styles.headerRight}>
+            <Text style={styles.headerTime}>
+              {currentTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+            <Text style={styles.headerDate}>
+              {currentTime.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })}
+            </Text>
+            <TouchableOpacity
+              style={styles.notifBtn}
+              onPress={() => router.push('/notifikasi' as any)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="notifications" size={20} color={C.dark} />
+              <NotifBadge count={unreadCount} />
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
+
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/*  STORIES (Anggota Aktif)                                         */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
         {stories.length > 0 && (
           <View style={styles.storiesSection}>
-            <View style={styles.sectionTitleRow}>
-              <View style={styles.sectionAccentBar} />
-              <Text style={styles.sectionTitle}>Anggota Aktif</Text>
-            </View>
+            <SectionTitle title="Anggota Aktif" icon="people" />
             <FlatList
               data={stories}
               renderItem={renderStory}
               keyExtractor={(item) => item.id}
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: 16 }}
-              ListHeaderComponent={() => (
-                <TouchableOpacity
-                  onPress={() => router.push('/profile')}
-                  style={styles.storyItem}
-                  activeOpacity={0.8}
-                >
-                  {/* Ring emas untuk "Anda" */}
-                  <LinearGradient
-                    colors={[C.gold, '#E8C26A']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.storyGradientRing}
-                  >
-                    {user?.avatar_url ? (
-                      <Image
-                        source={{ uri: user.avatar_url }}
-                        style={styles.storyAvatar}
-                      />
-                    ) : (
-                      <LinearGradient
-                        colors={G.avatarSelf}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={styles.storyAvatar}
-                      >
-                        <Text style={styles.storyAvatarText}>
-                          {getInitials(user?.nama ?? '?')}
-                        </Text>
-                      </LinearGradient>
-                    )}
-                  </LinearGradient>
-                  <Text style={[styles.storyName, { color: C.gold, fontWeight: '700' }]}>Anda</Text>
-                </TouchableOpacity>
-              )}
+              contentContainerStyle={styles.storiesListContent}
+              ListHeaderComponent={renderSelfStory}
             />
           </View>
         )}
 
-        {/* ── Aksi Cepat ──────────────────────────────────────────────────── */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/*  AKSI CEPAT                                                       */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
         <View style={styles.section}>
-          <View style={styles.sectionTitleRow}>
-            <View style={styles.sectionAccentBar} />
-            <Text style={styles.sectionTitle}>Aksi Cepat</Text>
-          </View>
+          <SectionTitle title="Aksi Cepat" icon="flash" />
           <View style={styles.aksiRow}>
-
-            <TouchableOpacity
-              style={styles.aksiCard}
-              onPress={() => router.push('/laporan/form')}
-              activeOpacity={0.82}
-            >
-              <LinearGradient colors={G.aksiIcon} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.aksiIcon}>
-                <Ionicons name="document-text" size={22} color={C.dark} />
-              </LinearGradient>
-              <Text style={styles.aksiLabel}>Buat{'\n'}Laporan</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.aksiCard}
-              onPress={() => router.push('/agenda/form')}
-              activeOpacity={0.82}
-            >
-              <LinearGradient colors={G.aksiIcon} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.aksiIcon}>
-                <Ionicons name="calendar" size={22} color={C.dark} />
-              </LinearGradient>
-              <Text style={styles.aksiLabel}>Buat{'\n'}Agenda</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.aksiCard}
-              onPress={() => router.push('/chat/admin')}
-              activeOpacity={0.82}
-            >
-              <LinearGradient colors={G.aksiIcon} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.aksiIcon}>
-                <Ionicons name="chatbubbles" size={22} color={C.dark} />
-              </LinearGradient>
-              <Text style={styles.aksiLabel}>Chat{'\n'}Admin</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.aksiCard}
-              onPress={() => router.push('/agenda/detail' as any)}
-              activeOpacity={0.82}
-            >
-              <LinearGradient colors={G.aksiIcon} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.aksiIcon}>
-                <Ionicons name="calendar-outline" size={22} color={C.dark} />
-              </LinearGradient>
-              <Text style={styles.aksiLabel}>Lihat{'\n'}Agenda</Text>
-            </TouchableOpacity>
-
+            <AksiItem icon="document-text" label="Buat
+Laporan" onPress={() => router.push('/laporan/form')} />
+            <AksiItem icon="calendar" label="Buat
+Agenda" onPress={() => router.push('/agenda/form')} />
+            <AksiItem icon="chatbubbles" label="Chat
+Admin" onPress={() => router.push('/chat/admin')} />
+            <AksiItem icon="calendar-outline" label="Lihat
+Agenda" onPress={() => router.push('/agenda/detail' as any)} />
           </View>
         </View>
 
-        {/* ── Live Event Card (Agenda) ─────────────────────────────────────── */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/*  LIVE EVENT CARD (Agenda)                                         */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
         <View style={styles.liveSection}>
           {liveEvent ? (
             <TouchableOpacity
@@ -592,15 +687,14 @@ export default function BerandaScreen() {
               activeOpacity={0.88}
             >
               <LinearGradient
-                colors={G.liveCard}
+                colors={liveEvent.status === 'ongoing' ? G.liveCard : G.liveCardAlt}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.liveCard}
               >
-                {/* Dekorasi lingkaran di sudut */}
                 <View style={styles.liveDecorCircle} />
 
-                {/* Label status */}
+                {/* Status badge */}
                 <View style={styles.liveBadge}>
                   <View style={[
                     styles.liveDot,
@@ -633,24 +727,38 @@ export default function BerandaScreen() {
               </LinearGradient>
             </TouchableOpacity>
           ) : (
-            <LinearGradient
-              colors={G.liveCard}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={[styles.liveCard, styles.liveCardEmpty]}
-            >
-              <Ionicons name="calendar-outline" size={30} color="rgba(255,255,255,0.5)" />
+            <LinearGradient colors={G.liveCardAlt} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.liveCard, styles.liveCardEmpty]}>
+              <Ionicons name="calendar-outline" size={32} color="rgba(255,255,255,0.4)" />
               <Text style={styles.liveEmptyText}>Tidak ada agenda aktif saat ini</Text>
+              <TouchableOpacity
+                style={styles.liveEmptyBtn}
+                onPress={() => router.push('/agenda/form')}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.liveEmptyBtnText}>+ Buat Agenda</Text>
+              </TouchableOpacity>
             </LinearGradient>
           )}
         </View>
 
-        {/* ── Feed: Update Anggota ─────────────────────────────────────────── */}
-        <View style={styles.section}>
-          <View style={styles.sectionTitleRow}>
-            <View style={styles.sectionAccentBar} />
-            <Text style={styles.sectionTitle}>Update Anggota</Text>
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/*  ERROR STATE                                                      */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {error && (
+          <View style={styles.errorBanner}>
+            <Ionicons name="warning-outline" size={18} color={C.danger} />
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity onPress={() => fetchData(true)}>
+              <Text style={styles.errorRetry}>Coba Lagi</Text>
+            </TouchableOpacity>
           </View>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/*  FEED: UPDATE ANGGOTA                                              */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        <View style={styles.section}>
+          <SectionTitle title="Update Anggota" icon="newspaper" />
           <FlatList
             data={posts}
             renderItem={renderPost}
@@ -662,7 +770,7 @@ export default function BerandaScreen() {
                   <MaterialIcons name="post-add" size={40} color={C.primary} />
                 </View>
                 <Text style={styles.emptyFeedTitle}>Belum ada update</Text>
-                <Text style={styles.emptyFeedSub}>Jadilah yang pertama berbagi</Text>
+                <Text style={styles.emptyFeedSub}>Jadilah yang pertama berbagi informasi</Text>
                 <TouchableOpacity
                   style={styles.emptyFeedBtn}
                   onPress={() => router.push('/post/options')}
@@ -678,29 +786,38 @@ export default function BerandaScreen() {
           />
         </View>
 
+        {/* Bottom spacer untuk tab bar */}
+        <View style={{ height: 100 }} />
+
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-// ─── Styles ────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Styles
+// ═══════════════════════════════════════════════════════════════════════════════
 
 const styles = StyleSheet.create({
+  // ── Safe Area ────────────────────────────────────────────────────────────────
   safeArea: {
     flex: 1,
     backgroundColor: C.bg,
   },
+  scrollContent: {
+    paddingBottom: 20,
+  },
 
-  // ── Loading ───────────────────────────────────────────────────────────────────
-  loadingGradient: {
+  // ── Loading ────────────────────────────────────────────────────────────────────
+  loadingContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 14,
+    gap: 16,
   },
   loadingText: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 14,
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 15,
     fontWeight: '500',
     letterSpacing: 0.3,
   },
@@ -710,10 +827,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 52,
-    paddingBottom: 50,
-    borderBottomLeftRadius: 36,
-    borderBottomRightRadius: 36,
+    paddingTop: 16,
+    paddingBottom: 28,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
     overflow: 'hidden',
   },
   headerDecorCircle1: {
@@ -734,26 +851,32 @@ const styles = StyleSheet.create({
     bottom: 10,
     left: 60,
   },
+  headerLeft: {
+    flex: 1,
+  },
   pkkBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(201,168,76,0.25)',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    marginBottom: 6,
+    backgroundColor: 'rgba(201,168,76,0.2)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginBottom: 8,
     borderWidth: 1,
-    borderColor: 'rgba(201,168,76,0.5)',
+    borderColor: 'rgba(201,168,76,0.4)',
+    gap: 4,
   },
   pkkBadgeText: {
     fontSize: 9,
     fontWeight: '800',
-    color: '#F0D080',
-    letterSpacing: 2,
+    color: C.goldLight,
+    letterSpacing: 1.5,
   },
   headerGreeting: {
     fontSize: 13,
     color: 'rgba(255,255,255,0.7)',
-    marginBottom: 2,
+    marginBottom: 3,
     letterSpacing: 0.2,
   },
   headerName: {
@@ -761,16 +884,17 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: -0.5,
+    lineHeight: 32,
   },
   jabatanBadge: {
     alignSelf: 'flex-start',
-    marginTop: 6,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    marginTop: 8,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   jabatanText: {
     fontSize: 11,
@@ -780,7 +904,7 @@ const styles = StyleSheet.create({
   },
   headerRight: {
     alignItems: 'flex-end',
-    gap: 2,
+    gap: 3,
   },
   headerTime: {
     fontSize: 24,
@@ -790,7 +914,7 @@ const styles = StyleSheet.create({
   },
   headerDate: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.65)',
+    color: 'rgba(255,255,255,0.6)',
     marginBottom: 10,
     letterSpacing: 0.1,
   },
@@ -814,7 +938,7 @@ const styles = StyleSheet.create({
     minWidth: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: '#EF4444',
+    backgroundColor: C.danger,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
@@ -827,23 +951,131 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  // ── Live Event ────────────────────────────────────────────────────────────────
-  liveSection: {
-    marginTop: -30,
+  // ── Section Title ────────────────────────────────────────────────────────────
+  section: {
+    paddingTop: 20,
+    paddingBottom: 4,
+  },
+  storiesSection: {
+    paddingTop: 20,
+    paddingBottom: 4,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 16,
-    marginBottom: 8,
+    marginBottom: 14,
+    gap: 8,
+  },
+  sectionAccentBar: {
+    width: 4,
+    height: 18,
+    borderRadius: 2,
+    backgroundColor: C.gold,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: C.textMain,
+    letterSpacing: -0.1,
+  },
+
+  // ── Stories ──────────────────────────────────────────────────────────────────
+  storiesListContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 4,
+  },
+  storyItem: {
+    alignItems: 'center',
+    marginRight: 14,
+    width: 72,
+  },
+  storyRing: {
+    width: 66,
+    height: 66,
+    borderRadius: 33,
+    padding: 3,
+    marginBottom: 6,
+  },
+  onlineDot: {
+    position: 'absolute',
+    top: 48,
+    right: 4,
+    width: 13,
+    height: 13,
+    borderRadius: 6.5,
+    backgroundColor: C.success,
+    borderWidth: 2.5,
+    borderColor: C.bg,
+  },
+  storyName: {
+    fontSize: 11,
+    color: C.textSub,
+    textAlign: 'center',
+    width: 72,
+    fontWeight: '500',
+  },
+  storyStatus: {
+    fontSize: 9,
+    textAlign: 'center',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+
+  // ── Aksi Cepat ───────────────────────────────────────────────────────────────
+  aksiRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    gap: 10,
+  },
+  aksiCard: {
+    flex: 1,
+    backgroundColor: C.surface,
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    gap: 9,
+    shadowColor: C.dark,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  aksiIconBg: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  aksiLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: C.textMain,
+    textAlign: 'center',
+    lineHeight: 16,
+    letterSpacing: 0.1,
+  },
+
+  // ── Live Event ─────────────────────────────────────────────────────────────────
+  liveSection: {
+    marginTop: 16,
+    paddingHorizontal: 16,
   },
   liveCard: {
     borderRadius: 22,
     padding: 18,
-    minHeight: 160,
+    minHeight: 150,
     justifyContent: 'space-between',
     overflow: 'hidden',
     shadowColor: C.darker,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 18,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 14,
+    elevation: 8,
   },
   liveDecorCircle: {
     position: 'absolute',
@@ -858,7 +1090,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    minHeight: 110,
+    minHeight: 140,
   },
   liveBadge: {
     flexDirection: 'row',
@@ -882,7 +1114,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
     lineHeight: 24,
-    flex: 1,
     marginBottom: 10,
     letterSpacing: -0.2,
   },
@@ -893,7 +1124,7 @@ const styles = StyleSheet.create({
   liveMetaItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
   },
   liveMetaText: {
     fontSize: 12,
@@ -922,145 +1153,65 @@ const styles = StyleSheet.create({
   },
   liveEmptyText: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.65)',
+    color: 'rgba(255,255,255,0.6)',
     textAlign: 'center',
     letterSpacing: 0.1,
   },
+  liveEmptyBtn: {
+    marginTop: 4,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  liveEmptyBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
 
-  // ── Section ───────────────────────────────────────────────────────────────────
-  section: {
-    paddingTop: 14,
-    paddingBottom: 4,
-  },
-  storiesSection: {
-    paddingTop: 14,
-    paddingBottom: 4,
-  },
-  sectionTitleRow: {
+  // ── Error Banner ─────────────────────────────────────────────────────────────
+  errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 14,
+    marginHorizontal: 16,
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FECACA',
     gap: 8,
   },
-  sectionAccentBar: {
-    width: 4,
-    height: 18,
-    borderRadius: 2,
-    backgroundColor: C.gold,
+  errorText: {
+    flex: 1,
+    fontSize: 13,
+    color: C.danger,
+    fontWeight: '500',
   },
-  sectionTitle: {
-    fontSize: 16,
+  errorRetry: {
+    fontSize: 12,
     fontWeight: '700',
-    color: C.textMain,
-    letterSpacing: -0.1,
+    color: C.dark,
   },
 
-  // ── Aksi Cepat ────────────────────────────────────────────────────────────────
-  aksiRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    gap: 10,
-  },
-  aksiCard: {
-    flex: 1,
-    backgroundColor: C.card,
-    borderRadius: 18,
-    paddingVertical: 14,
-    paddingHorizontal: 6,
-    alignItems: 'center',
-    gap: 9,
-    shadowColor: C.dark,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 5,
-    borderWidth: 1,
-    borderColor: '#EBF6F5',
-  },
-  aksiIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  aksiLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: C.textMain,
-    textAlign: 'center',
-    lineHeight: 16,
-    letterSpacing: 0.1,
-  },
-
-  // ── Stories ───────────────────────────────────────────────────────────────────
-  storyItem: {
-    alignItems: 'center',
-    marginRight: 14,
-    width: 68,
-  },
-  storyGradientRing: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    padding: 3,
-    marginBottom: 5,
-  },
-  storyAvatar: {
-    flex: 1,
-    borderRadius: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: C.bg,
-  },
-  onlineDot: {
-    position: 'absolute',
-    top: 50,
-    right: 2,
-    width: 13,
-    height: 13,
-    borderRadius: 6.5,
-    backgroundColor: '#22C55E',
-    borderWidth: 2.5,
-    borderColor: C.bg,
-  },
-  storyAvatarText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -0.2,
-  },
-  storyName: {
-    fontSize: 11,
-    color: C.textSub,
-    textAlign: 'center',
-    width: 68,
-    fontWeight: '500',
-  },
-  storyStatus: {
-    fontSize: 9,
-    textAlign: 'center',
-    marginTop: 1,
-    fontWeight: '500',
-  },
-
-  // ── Post Card ─────────────────────────────────────────────────────────────────
+  // ── Post Card ────────────────────────────────────────────────────────────────
   postCard: {
-    backgroundColor: C.card,
+    backgroundColor: C.surface,
     borderRadius: 20,
     padding: 16,
     paddingLeft: 20,
     marginHorizontal: 16,
     marginBottom: 12,
     shadowColor: C.dark,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 14,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
     borderWidth: 1,
-    borderColor: '#EBF6F5',
+    borderColor: C.border,
     overflow: 'hidden',
   },
   postAccentBar: {
@@ -1069,7 +1220,6 @@ const styles = StyleSheet.create({
     top: 16,
     bottom: 16,
     width: 4,
-    backgroundColor: C.primary,
     borderRadius: 4,
   },
   postAuthorRow: {
@@ -1078,18 +1228,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     gap: 10,
   },
-  postAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  postAvatarText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -0.2,
+  postAuthorInfo: {
+    flex: 1,
   },
   postAuthorName: {
     fontSize: 14,
@@ -1110,7 +1250,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    backgroundColor: C.light,
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 3,
@@ -1121,12 +1260,10 @@ const styles = StyleSheet.create({
     width: 5,
     height: 5,
     borderRadius: 3,
-    backgroundColor: C.dark,
   },
   categoryText: {
     fontSize: 11,
     fontWeight: '700',
-    color: C.dark,
     letterSpacing: 0.2,
   },
   postContent: {
@@ -1141,23 +1278,28 @@ const styles = StyleSheet.create({
     height: 190,
     borderRadius: 14,
     marginBottom: 10,
-    backgroundColor: C.light,
+    backgroundColor: C.primaryLight,
   },
   postFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 16,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: '#F0F9F8',
+    borderTopColor: C.divider,
   },
-  postLikeText: {
+  postFooterItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  postFooterText: {
     fontSize: 12,
     color: C.primary,
     fontWeight: '600',
   },
 
-  // ── Empty feed ────────────────────────────────────────────────────────────────
+  // ── Empty Feed ─────────────────────────────────────────────────────────────────
   emptyFeed: {
     alignItems: 'center',
     paddingVertical: 44,
@@ -1168,7 +1310,7 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 22,
-    backgroundColor: C.light,
+    backgroundColor: C.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
@@ -1192,6 +1334,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 6,
+    marginTop: 4,
   },
   emptyFeedBtnGrad: {
     flexDirection: 'row',
@@ -1205,5 +1348,22 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
     letterSpacing: 0.2,
+  },
+
+  // ── Shimmer (placeholder) ────────────────────────────────────────────────────
+  shimmerCard: {
+    backgroundColor: C.surface,
+    borderRadius: 20,
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  shimmerLine: {
+    height: 14,
+    backgroundColor: C.primaryLight,
+    borderRadius: 7,
+    width: '80%',
   },
 });
