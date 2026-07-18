@@ -1,31 +1,39 @@
 import { useEffect, useRef } from 'react';
-import { AppState } from 'react-native';
+import { AppState, AppStateStatus } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { useChatStore } from '@/stores/chatStore';
 import { useAuthStore } from '@/stores/authStore';
 import { insertInAppNotification } from '@/lib/notifications';
-import NetInfo from '@react-native-community/netinfo';
 import { GROUP_ROOM_ID, ADMIN_ROOM_ID, getPrivateRoomId } from '@/lib/roomId';
 
 /**
- * Global realtime hook — dipasang di root layout.
- * Mendengarkan pesan baru di semua room, fetch nama pengirim dari profiles,
- * dan memasukkan in-app notification ke tabel notifications.
+ * useChatRealtime — Global realtime hook dipasang di root layout.
+ *
+ * - Mendengarkan INSERT baru di semua room
+ * - Increment unread hanya jika room tidak sedang aktif
+ * - Insert in-app notification ke tabel notifications
+ * - Auto-reconnect saat app kembali foreground
  */
 export function useChatRealtime() {
-  const { incrementUnread } = useChatStore();
+  const { incrementUnread, activeRoomId } = useChatStore();
   const { user } = useAuthStore();
-  const userIdRef = useRef<string | null>(null);
+  const userIdRef     = useRef<string | null>(null);
+  const activeRoomRef = useRef<string | null>(null);
+  const channelRef    = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
-  // Cache nama pengirim agar tidak query terus-menerus
+  // Sync refs agar closure tidak stale
+  useEffect(() => { userIdRef.current = user?.id ?? null; }, [user?.id]);
+  useEffect(() => { activeRoomRef.current = activeRoomId; }, [activeRoomId]);
+
+  // Cache nama pengirim agar tidak query berulang
   const senderNameCache = useRef<Map<string, string>>(new Map());
 
-  useEffect(() => {
-    userIdRef.current = user?.id ?? null;
-  }, [user?.id]);
+  const subscribe = () => {
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+    }
 
-  useEffect(() => {
-    const sub = supabase
+    const ch = supabase
       .channel('chat-global-realtime')
       .on(
         'postgres_changes',
@@ -33,25 +41,28 @@ export function useChatRealtime() {
         async (payload) => {
           const msg = payload.new as any;
           const currentUserId = userIdRef.current;
-          if (!currentUserId || msg.sender_id === currentUserId) return;
+          if (!currentUserId) return;
+          if (msg.sender_id === currentUserId) return; // pesan sendiri, skip
 
           const senderId: string = msg.sender_id;
-          const content: string  = msg.content || '';
+          const content: string  = msg.content ?? '';
           const roomId: string   = msg.room_id;
 
           // Hanya proses room yang relevan untuk user ini
-          const myPrivateRooms = [
+          const relevantRooms = [
             getPrivateRoomId(currentUserId, senderId),
             GROUP_ROOM_ID,
             ADMIN_ROOM_ID,
           ];
-          if (!myPrivateRooms.includes(roomId)) return;
+          if (!relevantRooms.includes(roomId)) return;
 
-          // Naikkan unread counter di store
-          incrementUnread(roomId);
+          // Jangan increment jika user sedang di room tersebut
+          if (activeRoomRef.current !== roomId) {
+            incrementUnread(roomId);
+          }
 
-          // Fetch nama pengirim — gunakan cache agar tidak query berulang
-          let senderName: string = senderNameCache.current.get(senderId) ?? '';
+          // Gunakan sender_name dari payload (denormalized) atau fetch dari profiles
+          let senderName: string = msg.sender_name ?? senderNameCache.current.get(senderId) ?? '';
           if (!senderName) {
             try {
               const { data: profile } = await supabase
@@ -64,16 +75,18 @@ export function useChatRealtime() {
             } catch {
               senderName = 'Anggota PKK';
             }
+          } else {
+            senderNameCache.current.set(senderId, senderName);
           }
 
-          // Insert in-app notification berdasarkan tipe room
+          // Insert in-app notification
           if (roomId === GROUP_ROOM_ID) {
             await insertInAppNotification(
               currentUserId,
               `${senderName} — Ruang Rumpi`,
               content,
               'chat',
-              { route: '/chat/room', roomId: GROUP_ROOM_ID, roomName: 'Ruang Rumpi', roomType: 'group' }
+              { route: '/chat/room', roomId: GROUP_ROOM_ID, roomName: 'Ruang Rumpi PKK', roomType: 'group' }
             );
           } else if (roomId === ADMIN_ROOM_ID) {
             await insertInAppNotification(
@@ -81,10 +94,9 @@ export function useChatRealtime() {
               'Admin PKK',
               content,
               'chat',
-              { route: '/chat/room', roomId: ADMIN_ROOM_ID, roomName: 'Admin PKK', roomType: 'admin' }
+              { route: '/chat/room', roomId: ADMIN_ROOM_ID, roomName: 'Chat Admin PKK', roomType: 'admin' }
             );
           } else {
-            // Private chat
             await insertInAppNotification(
               currentUserId,
               `💬 ${senderName}`,
@@ -97,11 +109,25 @@ export function useChatRealtime() {
       )
       .subscribe();
 
-    // Supabase realtime sudah auto-reconnect sendiri.
-    // Tidak perlu panggil sub.subscribe() lagi saat foreground —
-    // itu justru membuat duplikasi subscription.
+    channelRef.current = ch;
+  };
+
+  useEffect(() => {
+    subscribe();
+
+    // Auto-reconnect saat app kembali foreground
+    const appStateSub = AppState.addEventListener('change', (next: AppStateStatus) => {
+      if (next === 'active') {
+        subscribe();
+      }
+    });
+
     return () => {
-      supabase.removeChannel(sub);
+      appStateSub.remove();
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 }

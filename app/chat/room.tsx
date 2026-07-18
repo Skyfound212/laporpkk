@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, Image, TextInput, TouchableOpacity, FlatList,
   KeyboardAvoidingView, Platform, Alert, AppState, AppStateStatus,
-  StyleSheet, Clipboard, Modal, Animated as RNAnimated,
+  StyleSheet, Modal,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +12,7 @@ import Swipeable from 'react-native-gesture-handler/Swipeable';
 import NetInfo from '@react-native-community/netinfo';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { useAuthStore } from '@/stores/authStore';
+import { useChatStore } from '@/stores/chatStore';
 import { supabase } from '@/lib/supabase';
 import { sendChatMessageNotification } from '@/lib/notifications';
 import { TypingIndicator } from '@/components/chat/TypingIndicator';
@@ -28,10 +30,12 @@ interface Message {
   id: string;
   room_id: string;
   sender_id: string;
+  sender_name?: string | null;
   content: string;
-  type: 'text' | 'system';
+  type: 'text' | 'system' | 'image';
   created_at: string;
-  status?: 'sending' | 'sent' | 'read';
+  status: 'sending' | 'sent' | 'read';
+  is_read: boolean;
   reply_to_id?: string | null;
   reply_to_content?: string | null;
   reply_to_sender_name?: string | null;
@@ -43,6 +47,8 @@ type ListItem =
   | { type: 'message'; id: string; data: Message };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 50;
 
 const fmtTime = (d: string) =>
   new Date(d).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
@@ -63,7 +69,7 @@ const buildListItems = (messages: Message[]): ListItem[] => {
   for (const msg of messages) {
     const key = new Date(msg.created_at).toDateString();
     if (key !== lastDateKey) {
-      items.push({ type: 'date_separator', id: `sep-${key}`, label: fmtDateLabel(msg.created_at) });
+      items.push({ type: 'date_separator', id: `sep-${key}-${msg.id}`, label: fmtDateLabel(msg.created_at) });
       lastDateKey = key;
     }
     items.push({ type: 'message', id: msg.id, data: msg });
@@ -71,7 +77,12 @@ const buildListItems = (messages: Message[]): ListItem[] => {
   return items;
 };
 
-const avatarLetter = (name: string) => name.trim().charAt(0).toUpperCase();
+const avatarLetter = (name: string) => (name ?? '?').trim().charAt(0).toUpperCase();
+
+const msgStatus = (msg: Message): 'sending' | 'sent' | 'read' => {
+  if (msg.status === 'sending') return 'sending';
+  return msg.is_read ? 'read' : 'sent';
+};
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -81,6 +92,7 @@ export default function ChatRoomScreen() {
     id: string; name: string; type: string; profileId?: string;
   }>();
   const { user } = useAuthStore();
+  const { clearUnread, setActiveRoom } = useChatStore();
 
   const isGroup   = id === GROUP_ROOM_ID;
   const isAdmin   = id === ADMIN_ROOM_ID;
@@ -88,28 +100,39 @@ export default function ChatRoomScreen() {
 
   // ── State ─────────────────────────────────────────────────────────────────
 
-  const [messages,      setMessages]      = useState<Message[]>([]);
-  const [inputText,     setInputText]     = useState('');
-  const [loading,       setLoading]       = useState(true);
-  const [replyTo,       setReplyTo]       = useState<ReplyInfo | null>(null);
-  const [isOtherTyping, setIsOtherTyping] = useState(false);
-  const [showScrollBtn, setShowScrollBtn] = useState(false);
-  const [isOnline,      setIsOnline]      = useState(true);
-  const [otherOnline,   setOtherOnline]   = useState(false);
-  const [msgMenuTarget, setMsgMenuTarget] = useState<Message | null>(null);
+  const [messages,        setMessages]        = useState<Message[]>([]);
+  const [inputText,       setInputText]       = useState('');
+  const [loading,         setLoading]         = useState(true);
+  const [loadingMore,     setLoadingMore]      = useState(false);
+  const [hasMore,         setHasMore]         = useState(true);
+  const [replyTo,         setReplyTo]         = useState<ReplyInfo | null>(null);
+  const [isOtherTyping,   setIsOtherTyping]   = useState(false);
+  const [showScrollBtn,   setShowScrollBtn]   = useState(false);
+  const [isOnline,        setIsOnline]        = useState(true);
+  const [otherOnline,     setOtherOnline]     = useState(false);
+  const [msgMenuTarget,   setMsgMenuTarget]   = useState<Message | null>(null);
   const [otherAvatarUrl,  setOtherAvatarUrl]  = useState<string | null>(null);
 
-  const flatListRef  = useRef<FlatList>(null);
-  const swipeRefs    = useRef<Map<string, Swipeable | null>>(new Map());
-  const channelRef   = useRef<RealtimeChannel | null>(null);
-  const typingRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flatListRef   = useRef<FlatList>(null);
+  const swipeRefs     = useRef<Map<string, Swipeable | null>>(new Map());
+  const channelRef    = useRef<RealtimeChannel | null>(null);
+  const typingRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isAtBottomRef = useRef(true);
-  const appStateRef  = useRef(AppState.currentState);
+  const appStateRef   = useRef(AppState.currentState);
+  // Cache avatar URL per sender (untuk grup/admin)
+  const avatarCache   = useRef<Map<string, string | null>>(new Map());
 
-  const roomName = name || (isGroup ? 'Ruang Rumpi PKK' : isAdmin ? 'Chat Admin' : 'Chat');
-  const listItems = buildListItems(messages);
+  const roomName = name || (isGroup ? 'Ruang Rumpi PKK' : isAdmin ? 'Chat Admin PKK' : 'Chat');
 
-  // ── Fetch avatar lawan (private chat) ────────────────────────────────────
+  // ── Tandai room sebagai aktif (agar useChatRealtime tidak double-count) ────
+
+  useEffect(() => {
+    setActiveRoom(id);
+    clearUnread(id);
+    return () => { setActiveRoom(null); };
+  }, [id, setActiveRoom, clearUnread]);
+
+  // ── Fetch avatar lawan (private chat) ─────────────────────────────────────
 
   useEffect(() => {
     if (!isPrivate || !profileId) return;
@@ -123,30 +146,90 @@ export default function ChatRoomScreen() {
       });
   }, [isPrivate, profileId]);
 
-  // ── Fetch ─────────────────────────────────────────────────────────────────
+  // ── Fetch pesan (paginasi: load 50 terbaru) ───────────────────────────────
 
-  const fetchMessages = useCallback(async () => {
+  const fetchMessages = useCallback(async (before?: string) => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('messages')
-        .select('id, room_id, sender_id, content, type, created_at, reply_to_id, reply_to_content, reply_to_sender_name, sender:profiles(nama, avatar_url)')
+        .select('id, room_id, sender_id, sender_name, content, type, created_at, is_read, reply_to_id, reply_to_content, reply_to_sender_name, sender:profiles(nama, avatar_url)')
         .eq('room_id', id)
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: false })
+        .limit(PAGE_SIZE);
 
+      if (before) {
+        query = query.lt('created_at', before);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
-      setMessages(
-        (data ?? []).map((m: any) => ({
-          ...m,
-          status: 'sent' as const,
-          sender: m.sender ? { nama: m.sender.nama ?? 'Anggota', avatar_url: m.sender.avatar_url ?? null } : undefined,
-        }))
-      );
+
+      const fetched = ((data ?? []) as any[]).reverse().map((m): Message => ({
+        ...m,
+        is_read: m.is_read ?? false,
+        status: m.is_read ? 'read' : 'sent',
+        sender: m.sender
+          ? { nama: m.sender.nama ?? 'Anggota', avatar_url: m.sender.avatar_url ?? null }
+          : { nama: m.sender_name ?? 'Anggota', avatar_url: null },
+      }));
+
+      if (!before) {
+        setMessages(fetched);
+        setHasMore(fetched.length === PAGE_SIZE);
+        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 200);
+      } else {
+        setMessages((prev) => {
+          const ids = new Set(prev.map((m) => m.id));
+          const newOnes = fetched.filter((m) => !ids.has(m.id));
+          return [...newOnes, ...prev];
+        });
+        setHasMore(fetched.length === PAGE_SIZE);
+      }
     } catch (err) {
       console.error('fetchMessages:', err);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   }, [id]);
+
+  // ── Load pesan lebih lama ─────────────────────────────────────────────────
+
+  const loadOlderMessages = useCallback(async () => {
+    if (loadingMore || !hasMore || messages.length === 0) return;
+    setLoadingMore(true);
+    const oldest = messages[0]?.created_at;
+    await fetchMessages(oldest);
+  }, [loadingMore, hasMore, messages, fetchMessages]);
+
+  // ── Tandai semua pesan dari orang lain sebagai sudah dibaca ───────────────
+
+  const markAllRead = useCallback(async () => {
+    if (!user?.id) return;
+    const unreadIds = messages
+      .filter((m) => m.sender_id !== user.id && !m.is_read)
+      .map((m) => m.id);
+    if (unreadIds.length === 0) return;
+
+    await supabase
+      .from('messages')
+      .update({ is_read: true })
+      .in('id', unreadIds);
+
+    setMessages((prev) =>
+      prev.map((m) =>
+        unreadIds.includes(m.id)
+          ? { ...m, is_read: true, status: 'read' as const }
+          : m
+      )
+    );
+    clearUnread(id);
+  }, [messages, user?.id, id, clearUnread]);
+
+  // Tandai saat pesan berubah
+  useEffect(() => {
+    if (messages.length > 0) markAllRead();
+  }, [messages.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Realtime subscription ─────────────────────────────────────────────────
 
@@ -156,25 +239,95 @@ export default function ChatRoomScreen() {
     const ch = supabase
       .channel(`room-${id}`, { config: { presence: { key: user?.id ?? '' } } })
 
-      // Pesan baru
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, (payload) => {
-        const newMsg = { ...payload.new as Message, status: 'sent' as const };
+      // ── Pesan baru (INSERT) ──────────────────────────────────────────────
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'messages',
+        filter: `room_id=eq.${id}`,
+      }, async (payload) => {
+        const raw = payload.new as any;
+        const isFromMe = raw.sender_id === user?.id;
+
+        // Resolusi sender info: gunakan sender_name dari payload dulu
+        let senderNama = raw.sender_name ?? '';
+        let senderAvatar: string | null = null;
+
+        if (!senderNama && !isFromMe) {
+          // Fetch dari profiles (fallback jika sender_name belum ter-denormalisasi)
+          const { data: prof } = await supabase
+            .from('profiles').select('nama, avatar_url').eq('id', raw.sender_id).single();
+          senderNama  = prof?.nama ?? 'Anggota';
+          senderAvatar = prof?.avatar_url ?? null;
+          avatarCache.current.set(raw.sender_id, senderAvatar);
+        } else if (!isFromMe) {
+          senderAvatar = avatarCache.current.get(raw.sender_id) ?? null;
+        }
+
+        const newMsg: Message = {
+          id: raw.id,
+          room_id: raw.room_id,
+          sender_id: raw.sender_id,
+          sender_name: raw.sender_name ?? senderNama,
+          content: raw.content,
+          type: raw.type ?? 'text',
+          created_at: raw.created_at,
+          is_read: raw.is_read ?? false,
+          status: 'sent',
+          reply_to_id: raw.reply_to_id ?? null,
+          reply_to_content: raw.reply_to_content ?? null,
+          reply_to_sender_name: raw.reply_to_sender_name ?? null,
+          sender: {
+            nama: isFromMe ? (user?.nama ?? 'Saya') : senderNama,
+            avatar_url: isFromMe ? (user as any)?.avatar_url ?? null : senderAvatar,
+          },
+        };
+
         setMessages((prev) => {
+          // Hapus optimistic jika ada
           const withoutTemp = prev.filter(
             (m) => !(m.status === 'sending' && m.sender_id === user?.id && m.content === newMsg.content)
           );
           if (withoutTemp.find((m) => m.id === newMsg.id)) return withoutTemp;
           return [...withoutTemp, newMsg];
         });
-        if (isAtBottomRef.current) setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
+
+        // Scroll ke bawah jika sudah di bawah
+        if (isAtBottomRef.current) {
+          setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
+        }
+
+        // Tandai sebagai dibaca jika dari orang lain dan kita sedang di bawah
+        if (!isFromMe && isAtBottomRef.current) {
+          await supabase.from('messages').update({ is_read: true }).eq('id', newMsg.id);
+          setMessages((prev) =>
+            prev.map((m) => m.id === newMsg.id ? { ...m, is_read: true, status: 'read' } : m)
+          );
+        }
       })
 
-      // Pesan dihapus
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages', filter: `room_id=eq.${id}` }, (payload) => {
+      // ── Pesan diupdate (UPDATE) — misalnya is_read berubah ───────────────
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'messages',
+        filter: `room_id=eq.${id}`,
+      }, (payload) => {
+        const updated = payload.new as any;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === updated.id
+              ? { ...m, is_read: updated.is_read ?? m.is_read, status: updated.is_read ? 'read' : m.status }
+              : m
+          )
+        );
+      })
+
+      // ── Pesan dihapus (DELETE) ────────────────────────────────────────────
+      .on('postgres_changes', {
+        event: 'DELETE', schema: 'public', table: 'messages',
+        filter: `room_id=eq.${id}`,
+      }, (payload) => {
         setMessages((prev) => prev.filter((m) => m.id !== (payload.old as any).id));
       })
 
-      // Presence (typing + online)
+      // ── Presence (typing + online) ────────────────────────────────────────
       .on('presence', { event: 'sync' }, () => {
         const state = ch.presenceState<{ user_id: string; is_typing?: boolean }>();
         const others = Object.values(state).flat().filter((p) => p.user_id !== user?.id);
@@ -191,15 +344,15 @@ export default function ChatRoomScreen() {
       });
 
     channelRef.current = ch;
-  }, [id, user?.id, isPrivate, profileId]);
+  }, [id, user?.id, isPrivate, profileId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── AppState (unsubscribe ketika background) ──────────────────────────────
+  // ── Setup: fetch + subscribe ───────────────────────────────────────────────
 
   useEffect(() => {
     fetchMessages();
     subscribeChannel();
 
-    const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
+    const appSub = AppState.addEventListener('change', (next: AppStateStatus) => {
       if (appStateRef.current.match(/active/) && next === 'background') {
         channelRef.current?.unsubscribe();
       } else if (appStateRef.current === 'background' && next === 'active') {
@@ -215,33 +368,20 @@ export default function ChatRoomScreen() {
       if (online) { subscribeChannel(); fetchMessages(); }
     });
 
-    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 300);
-
     return () => {
-      sub.remove();
+      appSub.remove();
       netUnsub();
       channelRef.current?.unsubscribe();
       if (typingRef.current) clearTimeout(typingRef.current);
     };
   }, [fetchMessages, subscribeChannel]);
 
-  // ── Tandai sudah dibaca ───────────────────────────────────────────────────
-
-  useEffect(() => {
-    if (!user?.id || messages.length === 0) return;
-    const unreadIds = messages
-      .filter((m) => m.sender_id !== user.id && (m as any).is_read === false)
-      .map((m) => m.id);
-    if (unreadIds.length === 0) return;
-    supabase.from('messages').update({ is_read: true }).in('id', unreadIds).then(() => {});
-  }, [messages, user?.id]);
-
   // ── Kirim pesan ───────────────────────────────────────────────────────────
 
   const sendMessage = async () => {
-    if (!inputText.trim() || !user?.id) return;
-
     const text = inputText.trim();
+    if (!text || !user?.id) return;
+
     const tempId = `temp-${Date.now()}`;
     const currentReply = replyTo;
 
@@ -249,13 +389,16 @@ export default function ChatRoomScreen() {
       id: tempId,
       room_id: id,
       sender_id: user.id,
+      sender_name: user.nama,
       content: text,
       type: 'text',
       created_at: new Date().toISOString(),
+      is_read: false,
       status: 'sending',
       reply_to_id: currentReply?.id ?? null,
       reply_to_content: currentReply?.content ?? null,
       reply_to_sender_name: currentReply?.senderName ?? null,
+      sender: { nama: user.nama ?? 'Saya', avatar_url: (user as any)?.avatar_url ?? null },
     };
 
     setMessages((prev) => [...prev, optimistic]);
@@ -267,30 +410,39 @@ export default function ChatRoomScreen() {
     if (typingRef.current) clearTimeout(typingRef.current);
 
     try {
-      const { error } = await supabase.from('messages').insert({
+      const { data: inserted, error } = await supabase.from('messages').insert({
         room_id: id,
         sender_id: user.id,
+        sender_name: user.nama ?? 'Anggota',
         content: text,
         type: 'text',
+        is_read: false,
         reply_to_id: currentReply?.id ?? null,
         reply_to_content: currentReply?.content ?? null,
         reply_to_sender_name: currentReply?.senderName ?? null,
-      });
+      }).select('id').single();
+
       if (error) throw error;
 
+      // Update optimistic dengan ID asli
       setMessages((prev) =>
-        prev.map((m) => m.id === tempId ? { ...m, status: 'sent' as const } : m)
+        prev.map((m) =>
+          m.id === tempId
+            ? { ...m, id: inserted?.id ?? tempId, status: 'sent' as const }
+            : m
+        )
       );
 
+      // Notifikasi push untuk private chat
       if (isPrivate && profileId) {
         sendChatMessageNotification(
           profileId,
           user.nama ?? 'Anggota PKK',
           text,
           id,
-          name,        // nama room = nama lawan bicara
+          name,
           'private',
-          user.id,     // senderProfileId supaya tap notif bisa buka room yg benar
+          user.id,
         );
       }
     } catch (err: any) {
@@ -317,7 +469,32 @@ export default function ChatRoomScreen() {
 
   const deleteMessage = async (msg: Message) => {
     setMessages((prev) => prev.filter((m) => m.id !== msg.id));
-    await supabase.from('messages').delete().eq('id', msg.id);
+    const { error } = await supabase.from('messages').delete().eq('id', msg.id);
+    if (error) {
+      // Rollback optimistic delete
+      setMessages((prev) => {
+        const has = prev.find((m) => m.id === msg.id);
+        if (has) return prev;
+        // Re-insert in the right position
+        const idx = prev.findIndex((m) => new Date(m.created_at) > new Date(msg.created_at));
+        if (idx === -1) return [...prev, msg];
+        return [...prev.slice(0, idx), msg, ...prev.slice(idx)];
+      });
+      Alert.alert('Gagal hapus', error.message);
+    }
+  };
+
+  // ── Forward / Teruskan pesan ──────────────────────────────────────────────
+
+  const forwardMessage = async (msg: Message) => {
+    setMsgMenuTarget(null);
+    // Copy to clipboard and show hint
+    await Clipboard.setStringAsync(msg.content);
+    Alert.alert(
+      'Teruskan Pesan',
+      'Teks pesan telah disalin. Buka room tujuan dan tempel pesan di sana.',
+      [{ text: 'OK' }]
+    );
   };
 
   // ── Scroll ────────────────────────────────────────────────────────────────
@@ -330,6 +507,8 @@ export default function ChatRoomScreen() {
   };
 
   // ── Render helpers ────────────────────────────────────────────────────────
+
+  const listItems = buildListItems(messages);
 
   const renderDateSep = (label: string) => (
     <View style={styles.dateSepWrap}>
@@ -359,11 +538,15 @@ export default function ChatRoomScreen() {
     // Grouping: apakah pesan sebelumnya dari sender yang sama?
     const prevListItem = listItems[index - 1];
     const prevMsg = prevListItem?.type === 'message' ? prevListItem.data : null;
-    const isContinued = prevMsg && prevMsg.type !== 'system' &&
+    const isContinued =
+      prevMsg &&
+      prevMsg.type !== 'system' &&
       prevMsg.sender_id === item.sender_id &&
-      (new Date(item.created_at).getTime() - new Date(prevMsg.created_at).getTime()) < 120000;
+      new Date(item.created_at).getTime() - new Date(prevMsg.created_at).getTime() < 120_000;
 
     const showAvatar = !isMe && !isContinued;
+    const senderDisplayName = item.sender?.nama ?? item.sender_name ?? 'Anggota';
+    const status = msgStatus(item);
 
     return (
       <Swipeable
@@ -383,7 +566,7 @@ export default function ChatRoomScreen() {
             setReplyTo({
               id: item.id,
               content: item.content,
-              senderName: isMe ? (user?.nama ?? 'Saya') : (item.sender?.nama ?? 'Anggota'),
+              senderName: isMe ? (user?.nama ?? 'Saya') : senderDisplayName,
             });
             swipeRefs.current.get(item.id)?.close();
           }
@@ -394,7 +577,11 @@ export default function ChatRoomScreen() {
           onLongPress={() => setMsgMenuTarget(item)}
           delayLongPress={400}
         >
-          <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther, isContinued && { marginTop: 1 }]}>
+          <View style={[
+            styles.msgRow,
+            isMe ? styles.msgRowMe : styles.msgRowOther,
+            isContinued && { marginTop: 1 },
+          ]}>
             {/* Avatar lawan bicara */}
             {!isMe && (
               <View style={[styles.msgAvatar, { opacity: showAvatar ? 1 : 0, overflow: 'hidden' }]}>
@@ -405,30 +592,35 @@ export default function ChatRoomScreen() {
                   />
                 ) : (
                   <Text style={styles.msgAvatarText}>
-                    {avatarLetter(item.sender?.nama ?? roomName)}
+                    {avatarLetter(senderDisplayName)}
                   </Text>
                 )}
               </View>
             )}
 
-            <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther,
-              isContinued && (isMe ? styles.bubbleMeContinued : styles.bubbleOtherContinued)]}>
-
+            <View style={[
+              styles.bubble,
+              isMe ? styles.bubbleMe : styles.bubbleOther,
+              isContinued && (isMe ? styles.bubbleMeContinued : styles.bubbleOtherContinued),
+            ]}>
               {/* Reply quote */}
-              {item.reply_to_content && (
+              {item.reply_to_content ? (
                 <View style={[styles.replyQuote, isMe ? styles.replyQuoteMe : styles.replyQuoteOther]}>
                   <Text style={[styles.replyName, isMe ? { color: '#E8F6F3' } : { color: '#5DB9AA' }]}>
                     {item.reply_to_sender_name}
                   </Text>
-                  <Text style={[styles.replyContent, isMe ? { color: '#D1F0EC' } : { color: '#636E72' }]} numberOfLines={2}>
+                  <Text
+                    style={[styles.replyContent, isMe ? { color: '#D1F0EC' } : { color: '#636E72' }]}
+                    numberOfLines={2}
+                  >
                     {item.reply_to_content}
                   </Text>
                 </View>
-              )}
+              ) : null}
 
-              {/* Nama pengirim (grup, bukan saya) */}
+              {/* Nama pengirim (grup/admin, bukan saya) */}
               {!isMe && (isGroup || isAdmin) && !isContinued && (
-                <Text style={styles.senderName}>{item.sender?.nama ?? 'Anggota'}</Text>
+                <Text style={styles.senderName}>{senderDisplayName}</Text>
               )}
 
               {/* Konten */}
@@ -443,9 +635,15 @@ export default function ChatRoomScreen() {
                 </Text>
                 {isMe && (
                   <Ionicons
-                    name={item.status === 'read' ? 'checkmark-done' : item.status === 'sending' ? 'checkmark-outline' : 'checkmark-done-outline'}
+                    name={
+                      status === 'sending'
+                        ? 'checkmark-outline'
+                        : status === 'read'
+                        ? 'checkmark-done'
+                        : 'checkmark-done-outline'
+                    }
                     size={13}
-                    color={item.status === 'read' ? '#B2F2EE' : 'rgba(255,255,255,0.65)'}
+                    color={status === 'read' ? '#B2F2EE' : 'rgba(255,255,255,0.65)'}
                     style={{ marginLeft: 3 }}
                   />
                 )}
@@ -457,17 +655,20 @@ export default function ChatRoomScreen() {
     );
   };
 
-  // ── Layout ────────────────────────────────────────────────────────────────
+  // ── Render utama ──────────────────────────────────────────────────────────
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
           <Ionicons name="arrow-back" size={22} color="#2D3436" />
         </TouchableOpacity>
 
-        {/* Avatar kecil */}
         <View style={[styles.headerAvatar, { overflow: 'hidden' }]}>
           {isPrivate && otherAvatarUrl ? (
             <Image source={{ uri: otherAvatarUrl }} style={{ width: 38, height: 38, borderRadius: 19 }} />
@@ -479,14 +680,22 @@ export default function ChatRoomScreen() {
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={styles.headerName} numberOfLines={1}>{roomName}</Text>
           <Text style={styles.headerStatus}>
-            {!isOnline ? '⚠️ Tidak ada koneksi' :
-              isGroup ? `${Object.keys(channelRef.current?.presenceState() ?? {}).length} online` :
-              isAdmin ? 'Admin PKK' :
-              otherOnline ? '🟢 Online' : '⚫ Offline'}
+            {!isOnline
+              ? '⚠️ Tidak ada koneksi'
+              : isGroup
+              ? `${Object.keys(channelRef.current?.presenceState() ?? {}).length} online`
+              : isAdmin
+              ? 'Admin PKK'
+              : otherOnline
+              ? '🟢 Online'
+              : '⚫ Offline'}
           </Text>
         </View>
 
-        <TouchableOpacity style={styles.headerAction} onPress={() => Alert.alert('Info', `Room ID: ${id}`)}>
+        <TouchableOpacity
+          style={styles.headerAction}
+          onPress={() => Alert.alert(roomName, `Jenis: ${isGroup ? 'Grup' : isAdmin ? 'Admin' : 'Privat'}`)}
+        >
           <Ionicons name="ellipsis-vertical" size={20} color="#636E72" />
         </TouchableOpacity>
       </View>
@@ -495,9 +704,8 @@ export default function ChatRoomScreen() {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        keyboardVerticalOffset={0}
       >
-        {/* Pesan */}
         <View style={{ flex: 1 }}>
           <FlatList
             ref={flatListRef}
@@ -508,8 +716,24 @@ export default function ChatRoomScreen() {
             onScroll={handleScroll}
             scrollEventThrottle={100}
             keyboardShouldPersistTaps="handled"
-            removeClippedSubviews
+            removeClippedSubviews={Platform.OS === 'android'}
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+            onEndReached={loadOlderMessages}
+            onEndReachedThreshold={0.15}
+            ListHeaderComponent={
+              loadingMore ? (
+                <View style={{ alignItems: 'center', paddingVertical: 10 }}>
+                  <Text style={{ color: '#B2BEC3', fontSize: 12 }}>Memuat pesan lama...</Text>
+                </View>
+              ) : hasMore && messages.length > 0 ? (
+                <TouchableOpacity
+                  style={styles.loadMoreBtn}
+                  onPress={loadOlderMessages}
+                >
+                  <Text style={styles.loadMoreText}>⬆ Muat pesan lebih lama</Text>
+                </TouchableOpacity>
+              ) : null
+            }
             ListEmptyComponent={() =>
               !loading ? (
                 <View style={styles.emptyWrap}>
@@ -519,9 +743,7 @@ export default function ChatRoomScreen() {
                   <Text style={styles.emptyTitle}>
                     {isGroup ? 'Selamat datang di Ruang Rumpi!' : `Mulai percakapan dengan ${roomName}`}
                   </Text>
-                  <Text style={styles.emptySub}>
-                    Kirim pesan pertama untuk memulai.
-                  </Text>
+                  <Text style={styles.emptySub}>Kirim pesan pertama untuk memulai.</Text>
                 </View>
               ) : null
             }
@@ -532,7 +754,7 @@ export default function ChatRoomScreen() {
             <TypingIndicator avatarLetter={avatarLetter(roomName)} />
           )}
 
-          {/* Scroll-to-bottom */}
+          {/* Scroll-to-bottom button */}
           {showScrollBtn && (
             <TouchableOpacity
               style={styles.scrollBtn}
@@ -544,7 +766,7 @@ export default function ChatRoomScreen() {
           )}
         </View>
 
-        {/* Reply preview */}
+        {/* Reply preview bar */}
         {replyTo && (
           <View style={styles.replyBar}>
             <Ionicons name="return-up-back-outline" size={18} color="#7ECDC0" style={{ marginRight: 10 }} />
@@ -552,7 +774,10 @@ export default function ChatRoomScreen() {
               <Text style={styles.replyBarName}>{replyTo.senderName}</Text>
               <Text style={styles.replyBarText} numberOfLines={1}>{replyTo.content}</Text>
             </View>
-            <TouchableOpacity onPress={() => setReplyTo(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity
+              onPress={() => setReplyTo(null)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
               <Ionicons name="close" size={20} color="#636E72" />
             </TouchableOpacity>
           </View>
@@ -565,11 +790,12 @@ export default function ChatRoomScreen() {
               value={inputText}
               onChangeText={handleInputChange}
               multiline
-              maxLength={1000}
+              maxLength={2000}
               placeholder="Pesan..."
               placeholderTextColor="#B2BEC3"
               style={styles.input}
               textAlignVertical="center"
+              returnKeyType="default"
             />
           </View>
 
@@ -607,7 +833,7 @@ export default function ChatRoomScreen() {
               </Text>
             </View>
 
-            {/* Aksi: Reply */}
+            {/* Balas */}
             <TouchableOpacity
               style={styles.msgMenuItem}
               onPress={() => {
@@ -615,7 +841,9 @@ export default function ChatRoomScreen() {
                 setReplyTo({
                   id: msgMenuTarget.id,
                   content: msgMenuTarget.content,
-                  senderName: isMe ? (user?.nama ?? 'Saya') : (msgMenuTarget.sender?.nama ?? 'Anggota'),
+                  senderName: isMe
+                    ? (user?.nama ?? 'Saya')
+                    : (msgMenuTarget.sender?.nama ?? msgMenuTarget.sender_name ?? 'Anggota'),
                 });
                 setMsgMenuTarget(null);
               }}
@@ -624,30 +852,43 @@ export default function ChatRoomScreen() {
               <Text style={styles.msgMenuItemText}>Balas</Text>
             </TouchableOpacity>
 
-            {/* Aksi: Copy */}
+            {/* Salin */}
             <TouchableOpacity
               style={styles.msgMenuItem}
-              onPress={() => {
-                Clipboard.setString(msgMenuTarget.content);
-                Alert.alert('Disalin', 'Pesan berhasil disalin');
+              onPress={async () => {
+                await Clipboard.setStringAsync(msgMenuTarget.content);
                 setMsgMenuTarget(null);
+                Alert.alert('Disalin', 'Pesan berhasil disalin ke clipboard');
               }}
             >
               <Ionicons name="copy-outline" size={20} color="#636E72" />
               <Text style={styles.msgMenuItemText}>Salin Teks</Text>
             </TouchableOpacity>
 
-            {/* Aksi: Hapus (hanya pesan sendiri) */}
+            {/* Teruskan */}
+            <TouchableOpacity
+              style={styles.msgMenuItem}
+              onPress={() => forwardMessage(msgMenuTarget)}
+            >
+              <Ionicons name="share-outline" size={20} color="#636E72" />
+              <Text style={styles.msgMenuItemText}>Teruskan</Text>
+            </TouchableOpacity>
+
+            {/* Hapus (hanya pesan sendiri) */}
             {msgMenuTarget.sender_id === user?.id && (
               <TouchableOpacity
                 style={[styles.msgMenuItem, { borderTopWidth: 1, borderTopColor: '#F0F0F0' }]}
                 onPress={() => {
                   const target = msgMenuTarget;
                   setMsgMenuTarget(null);
-                  Alert.alert('Hapus Pesan', 'Pesan ini akan dihapus secara permanen.', [
-                    { text: 'Batal', style: 'cancel' },
-                    { text: 'Hapus', style: 'destructive', onPress: () => deleteMessage(target) },
-                  ]);
+                  Alert.alert(
+                    'Hapus Pesan',
+                    'Pesan ini akan dihapus secara permanen untuk semua orang.',
+                    [
+                      { text: 'Batal', style: 'cancel' },
+                      { text: 'Hapus', style: 'destructive', onPress: () => deleteMessage(target) },
+                    ]
+                  );
                 }}
               >
                 <Ionicons name="trash-outline" size={20} color="#FF6B6B" />
@@ -666,7 +907,7 @@ export default function ChatRoomScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#EDF7F6' },
 
-  // ── Header ─────────────────────────────────────────────────────────────────
+  // Header
   header: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: '#fff',
@@ -687,7 +928,7 @@ const styles = StyleSheet.create({
   headerStatus: { fontSize: 11, color: '#7ECDC0', marginTop: 1 },
   headerAction: { padding: 6, marginLeft: 4 },
 
-  // ── Pesan ──────────────────────────────────────────────────────────────────
+  // Pesan
   msgRow: { flexDirection: 'row', marginVertical: 3, paddingHorizontal: 10 },
   msgRowMe: { justifyContent: 'flex-end' },
   msgRowOther: { justifyContent: 'flex-start', alignItems: 'flex-end' },
@@ -719,29 +960,55 @@ const styles = StyleSheet.create({
   msgTime: { fontSize: 10 },
 
   // Reply quote
-  replyQuote: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, marginBottom: 8, borderLeftWidth: 3 },
+  replyQuote: {
+    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6,
+    marginBottom: 8, borderLeftWidth: 3,
+  },
   replyQuoteMe: { backgroundColor: 'rgba(255,255,255,0.18)', borderLeftColor: '#fff' },
   replyQuoteOther: { backgroundColor: '#F0FAF9', borderLeftColor: '#7ECDC0' },
   replyName: { fontSize: 10, fontWeight: '700', marginBottom: 2 },
   replyContent: { fontSize: 12, lineHeight: 16 },
 
-  // ── Separator tanggal ──────────────────────────────────────────────────────
+  // Separator tanggal
   dateSepWrap: { alignItems: 'center', marginVertical: 12 },
-  dateSepBubble: { backgroundColor: 'rgba(126,205,192,0.2)', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 5 },
+  dateSepBubble: {
+    backgroundColor: 'rgba(126,205,192,0.2)', borderRadius: 20,
+    paddingHorizontal: 14, paddingVertical: 5,
+  },
   dateSepText: { fontSize: 11, color: '#5DB9AA', fontWeight: '600' },
 
-  // ── Sistem ─────────────────────────────────────────────────────────────────
+  // Sistem
   systemWrap: { alignItems: 'center', marginVertical: 8 },
-  systemBubble: { backgroundColor: '#F5F5F5', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 5 },
+  systemBubble: {
+    backgroundColor: '#F5F5F5', borderRadius: 20,
+    paddingHorizontal: 14, paddingVertical: 5,
+  },
   systemText: { fontSize: 11, color: '#636E72' },
 
-  // ── Empty ──────────────────────────────────────────────────────────────────
-  emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80, paddingHorizontal: 32 },
-  emptyIcon: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#E8F6F3', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#2D3436', textAlign: 'center', marginBottom: 8 },
+  // Empty
+  emptyWrap: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    paddingTop: 80, paddingHorizontal: 32,
+  },
+  emptyIcon: {
+    width: 72, height: 72, borderRadius: 36,
+    backgroundColor: '#E8F6F3',
+    alignItems: 'center', justifyContent: 'center', marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 16, fontWeight: '700', color: '#2D3436',
+    textAlign: 'center', marginBottom: 8,
+  },
   emptySub: { fontSize: 13, color: '#B2BEC3', textAlign: 'center' },
 
-  // ── Scroll btn ─────────────────────────────────────────────────────────────
+  // Load more
+  loadMoreBtn: {
+    alignItems: 'center', paddingVertical: 10,
+    marginBottom: 4,
+  },
+  loadMoreText: { fontSize: 12, color: '#5DB9AA', fontWeight: '600' },
+
+  // Scroll btn
   scrollBtn: {
     position: 'absolute', bottom: 12, right: 16,
     width: 38, height: 38, borderRadius: 19,
@@ -751,11 +1018,15 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
 
-  // ── Swipe ──────────────────────────────────────────────────────────────────
+  // Swipe
   swipeAction: { justifyContent: 'center', paddingLeft: 10, paddingRight: 4 },
-  swipeIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#E8F6F3', alignItems: 'center', justifyContent: 'center' },
+  swipeIcon: {
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: '#E8F6F3',
+    alignItems: 'center', justifyContent: 'center',
+  },
 
-  // ── Reply bar ──────────────────────────────────────────────────────────────
+  // Reply bar
   replyBar: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: '#fff',
@@ -766,7 +1037,7 @@ const styles = StyleSheet.create({
   replyBarName: { fontSize: 11, fontWeight: '700', color: '#5DB9AA', marginBottom: 2 },
   replyBarText: { fontSize: 12, color: '#636E72' },
 
-  // ── Input bar ──────────────────────────────────────────────────────────────
+  // Input bar
   inputBar: {
     flexDirection: 'row', alignItems: 'flex-end',
     backgroundColor: '#fff',
@@ -794,7 +1065,7 @@ const styles = StyleSheet.create({
   },
   sendBtnDisabled: { backgroundColor: '#C8EDEA', shadowOpacity: 0 },
 
-  // ── Modal menu pesan ───────────────────────────────────────────────────────
+  // Modal menu pesan
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
   msgMenu: {
     position: 'absolute', bottom: 0, left: 0, right: 0,

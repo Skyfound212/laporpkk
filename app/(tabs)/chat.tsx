@@ -7,25 +7,25 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useAuthStore } from '@/stores/authStore';
+import { useChatStore } from '@/stores/chatStore';
 import { supabase } from '@/lib/supabase';
 import { getPrivateRoomId, GROUP_ROOM_ID, ADMIN_ROOM_ID } from '@/lib/roomId';
 
 // ─── Tipe ─────────────────────────────────────────────────────────────────────
 
 interface RoomItem {
-  id: string;          // room_id yang dikirim ke room.tsx
-  profileId?: string;  // untuk private: id user lawan
+  id: string;
+  profileId?: string;
   name: string;
   subtitle: string;
   type: 'group' | 'private' | 'admin';
   lastMessageAt?: string;
   lastMessage?: string;
   lastSenderId?: string;
-  unreadCount: number;
   avatarUrl?: string;
 }
 
-// ─── Warna avatar deterministik ────────────────────────────────────────────────
+// ─── Warna avatar deterministik ───────────────────────────────────────────────
 
 const AVATAR_COLORS = ['#7ECDC0', '#5DB9AA', '#2E9F95', '#81C784', '#F48FB1', '#FFB74D', '#7986CB'];
 function avatarColor(name: string): string {
@@ -48,9 +48,11 @@ function formatRoomTime(dateStr?: string): string {
   return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
 }
 
-// ─── Komponen avatar ──────────────────────────────────────────────────────────
+// ─── Avatar ───────────────────────────────────────────────────────────────────
 
-function RoomAvatar({ name, type, isOnline, avatarUrl }: { name: string; type: RoomItem['type']; isOnline?: boolean; avatarUrl?: string }) {
+function RoomAvatar({ name, type, isOnline, avatarUrl }: {
+  name: string; type: RoomItem['type']; isOnline?: boolean; avatarUrl?: string;
+}) {
   const letter = name.trim().charAt(0).toUpperCase();
   const bg = type === 'group' ? '#2E9F95' : type === 'admin' ? '#5C6BC0' : avatarColor(name);
   const icon = type === 'group' ? 'people' : type === 'admin' ? 'headset' : null;
@@ -59,7 +61,7 @@ function RoomAvatar({ name, type, isOnline, avatarUrl }: { name: string; type: R
     <View style={{ position: 'relative', marginRight: 12 }}>
       <View style={[styles.avatar, { backgroundColor: bg, overflow: 'hidden' }]}>
         {avatarUrl && type === 'private' ? (
-          <Image source={{ uri: avatarUrl }} style={{ width: 46, height: 46, borderRadius: 23 }} />
+          <Image source={{ uri: avatarUrl }} style={{ width: 50, height: 50, borderRadius: 25 }} />
         ) : icon ? (
           <Ionicons name={icon as any} size={22} color="#fff" />
         ) : (
@@ -78,11 +80,12 @@ function RoomAvatar({ name, type, isOnline, avatarUrl }: { name: string; type: R
 export default function ChatScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
+  const { unreadPerRoom, initFromDb } = useChatStore();
 
-  const [rooms, setRooms] = useState<RoomItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [rooms, setRooms]         = useState<RoomItem[]>([]);
+  const [loading, setLoading]     = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [search, setSearch] = useState('');
+  const [search, setSearch]       = useState('');
   const [onlineIds, setOnlineIds] = useState<Set<string>>(new Set());
   const presenceRef = useRef<any>(null);
 
@@ -109,7 +112,7 @@ export default function ChatScreen() {
   const fetchRooms = useCallback(async () => {
     if (!user?.id) return;
     try {
-      // 1. Ambil semua anggota selain diri sendiri
+      // 1. Semua anggota aktif selain diri sendiri
       const { data: profiles } = await supabase
         .from('profiles')
         .select('id, nama, jabatan, avatar_url')
@@ -119,43 +122,45 @@ export default function ChatScreen() {
 
       const members = profiles ?? [];
 
-      // 2. Buat list room_id untuk private chats
+      // 2. Room IDs
       const privateRoomIds = members.map((m: any) => getPrivateRoomId(user.id, m.id));
       const allRoomIds = [GROUP_ROOM_ID, ADMIN_ROOM_ID, ...privateRoomIds];
 
-      // 3. Ambil pesan terakhir tiap room sekaligus (1 query)
+      // 3. Pesan terakhir per room (1 query, sorted desc, ambil first per room)
       const { data: lastMsgs } = await supabase
         .from('messages')
-        .select('room_id, content, created_at, sender_id, type')
+        .select('room_id, content, created_at, sender_id, type, sender_name')
         .in('room_id', allRoomIds)
         .order('created_at', { ascending: false });
 
-      // 4. Ambil pesan belum dibaca (room mana saja yang ada pesan dari orang lain)
+      // 4. Unread messages (is_read = false, bukan dari saya)
       const { data: unreadMsgs } = await supabase
         .from('messages')
-        .select('room_id, id')
+        .select('room_id')
         .in('room_id', allRoomIds)
         .neq('sender_id', user.id)
-        .eq('is_read', false)
-        .order('created_at', { ascending: false });
+        .eq('is_read', false);
 
-      // 5. Bangun map lastMsg per room
-      const lastMsgMap: Record<string, typeof lastMsgs extends (infer T)[] | null ? T : never> = {};
+      // 5. Map lastMsg per room (first occurrence = latest)
+      const lastMsgMap: Record<string, any> = {};
       for (const msg of lastMsgs ?? []) {
         if (!lastMsgMap[msg.room_id]) lastMsgMap[msg.room_id] = msg;
       }
 
-      // 6. Bangun map unread per room
-      const unreadMap: Record<string, number> = {};
+      // 6. Map unread per room
+      const dbUnreadMap: Record<string, number> = {};
       for (const msg of unreadMsgs ?? []) {
-        unreadMap[msg.room_id] = (unreadMap[msg.room_id] ?? 0) + 1;
+        dbUnreadMap[msg.room_id] = (dbUnreadMap[msg.room_id] ?? 0) + 1;
       }
 
+      // Sync ke chatStore agar badge di tab bar juga akurat
+      initFromDb(dbUnreadMap);
+
       const lastContent = (msg: any): string => {
-        if (!msg) return 'Belum ada pesan';
+        if (!msg) return '';
         if (msg.type === 'image') return '📷 Gambar';
         if (msg.type === 'system') return msg.content;
-        return msg.content;
+        return msg.content ?? '';
       };
 
       // 7. Bangun rooms
@@ -168,7 +173,6 @@ export default function ChatScreen() {
           lastMessage: lastContent(lastMsgMap[GROUP_ROOM_ID]),
           lastMessageAt: lastMsgMap[GROUP_ROOM_ID]?.created_at,
           lastSenderId: lastMsgMap[GROUP_ROOM_ID]?.sender_id,
-          unreadCount: unreadMap[GROUP_ROOM_ID] ?? 0,
         },
         {
           id: ADMIN_ROOM_ID,
@@ -178,7 +182,6 @@ export default function ChatScreen() {
           lastMessage: lastContent(lastMsgMap[ADMIN_ROOM_ID]),
           lastMessageAt: lastMsgMap[ADMIN_ROOM_ID]?.created_at,
           lastSenderId: lastMsgMap[ADMIN_ROOM_ID]?.sender_id,
-          unreadCount: unreadMap[ADMIN_ROOM_ID] ?? 0,
         },
       ];
 
@@ -189,17 +192,16 @@ export default function ChatScreen() {
           id: rid,
           profileId: m.id,
           name: m.nama,
-          subtitle: m.jabatan,
-          type: 'private',
+          subtitle: m.jabatan ?? '',
+          type: 'private' as const,
           avatarUrl: m.avatar_url ?? undefined,
           lastMessage: lm ? lastContent(lm) : undefined,
           lastMessageAt: lm?.created_at,
           lastSenderId: lm?.sender_id,
-          unreadCount: unreadMap[rid] ?? 0,
         };
       });
 
-      // Urutkan: ada pesan → terbaru dulu; belum pernah chat → paling bawah
+      // Sort private: ada pesan → terbaru dulu
       privateRooms.sort((a, b) => {
         if (a.lastMessageAt && b.lastMessageAt)
           return new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime();
@@ -215,22 +217,58 @@ export default function ChatScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [user?.id]);
+  }, [user?.id, initFromDb]);
 
   useEffect(() => { fetchRooms(); }, [fetchRooms]);
 
-  // ── Realtime: update last message saat ada pesan baru ─────────────────────
+  // ── Realtime: targeted room update (tanpa full refetch) ───────────────────
 
   useEffect(() => {
     if (!user?.id) return;
+
     const ch = supabase
-      .channel('chat-list-messages')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => {
-        fetchRooms();
-      })
+      .channel('chat-list-messages-v2')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages' },
+        (payload) => {
+          const msg = payload.new as any;
+          const roomId: string = msg.room_id;
+          const isMe = msg.sender_id === user?.id;
+
+          // Update room entry yang terdampak
+          setRooms((prev) => {
+            const idx = prev.findIndex((r) => r.id === roomId);
+            if (idx === -1) return prev; // room tidak ada di list (bukan room relevan)
+
+            const updated = { ...prev[idx] };
+            updated.lastMessage = msg.type === 'image' ? '📷 Gambar'
+              : msg.type === 'system' ? msg.content
+              : msg.content ?? '';
+            updated.lastMessageAt = msg.created_at;
+            updated.lastSenderId  = msg.sender_id;
+
+            const next = [...prev];
+            next[idx] = updated;
+
+            // Re-sort private rooms (fixed rooms tetap di atas)
+            const fixed   = next.filter((r) => r.type === 'group' || r.type === 'admin');
+            const privates = next.filter((r) => r.type === 'private').sort((a, b) => {
+              if (a.lastMessageAt && b.lastMessageAt)
+                return new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime();
+              if (a.lastMessageAt) return -1;
+              if (b.lastMessageAt) return 1;
+              return 0;
+            });
+
+            return [...fixed, ...privates];
+          });
+        }
+      )
       .subscribe();
+
     return () => { supabase.removeChannel(ch); };
-  }, [user?.id, fetchRooms]);
+  }, [user?.id]);
 
   // ── Filter pencarian ──────────────────────────────────────────────────────
 
@@ -241,10 +279,11 @@ export default function ChatScreen() {
   // ── Render item ───────────────────────────────────────────────────────────
 
   const renderItem = ({ item }: { item: RoomItem }) => {
-    const isOnline = item.profileId ? onlineIds.has(item.profileId) : false;
-    const isMe = item.lastSenderId === user?.id;
-    const hasUnread = item.unreadCount > 0;
-    const hasMsg = !!item.lastMessage;
+    const isOnline  = item.profileId ? onlineIds.has(item.profileId) : false;
+    const isMe      = item.lastSenderId === user?.id;
+    const unread    = unreadPerRoom[item.id] ?? 0;
+    const hasUnread = unread > 0;
+    const hasMsg    = !!item.lastMessage;
 
     return (
       <TouchableOpacity
@@ -280,7 +319,11 @@ export default function ChatScreen() {
 
           <View style={styles.roomPreviewRow}>
             <Text
-              style={[styles.roomPreview, hasUnread && styles.roomPreviewBold, !hasMsg && styles.roomPreviewEmpty]}
+              style={[
+                styles.roomPreview,
+                hasUnread && styles.roomPreviewBold,
+                !hasMsg && styles.roomPreviewEmpty,
+              ]}
               numberOfLines={1}
             >
               {hasMsg
@@ -290,7 +333,7 @@ export default function ChatScreen() {
             {hasUnread && (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>
-                  {item.unreadCount > 99 ? '99+' : String(item.unreadCount)}
+                  {unread > 99 ? '99+' : String(unread)}
                 </Text>
               </View>
             )}
@@ -364,7 +407,9 @@ export default function ChatScreen() {
                 {search ? 'Tidak ditemukan' : 'Belum ada percakapan'}
               </Text>
               <Text style={{ color: '#B2BEC3', fontSize: 13, marginTop: 6, textAlign: 'center', paddingHorizontal: 32 }}>
-                {search ? `Tidak ada anggota bernama "${search}"` : 'Mulai chat dengan anggota PKK di bawah'}
+                {search
+                  ? `Tidak ada anggota bernama "${search}"`
+                  : 'Mulai chat dengan anggota PKK di bawah'}
               </Text>
             </View>
           )}
@@ -413,7 +458,7 @@ const styles = StyleSheet.create({
   roomRowGroup: { backgroundColor: '#F0FAF9' },
   roomRowAdmin: { backgroundColor: '#F5F3FF' },
 
-  separator: { height: 1, backgroundColor: '#F0F9F8', marginLeft: 76 },
+  separator: { height: 1, backgroundColor: '#F0F9F8', marginLeft: 78 },
 
   avatar: {
     width: 50, height: 50, borderRadius: 25,

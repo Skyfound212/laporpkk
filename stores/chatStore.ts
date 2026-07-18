@@ -1,22 +1,25 @@
 import { create } from 'zustand';
 
 /**
- * chatStore — disederhanakan.
+ * chatStore — state UI chat global.
  *
- * SQLite offline-cache dihapus karena bertentangan dengan auth custom (profiles table).
- * Semua pengiriman / penerimaan pesan dilakukan langsung di room.tsx via Supabase.
- * Store ini hanya menyimpan state UI (unread per room) yang ringan.
+ * - unreadPerRoom: jumlah pesan belum dibaca per room (di-init dari DB saat fetchRooms)
+ * - activeRoomId: room yang sedang terbuka, agar useChatRealtime tidak double-count
  */
 
 interface ChatState {
   unreadPerRoom: Record<string, number>;
+  activeRoomId: string | null;
   setUnread: (roomId: string, count: number) => void;
   incrementUnread: (roomId: string) => void;
   clearUnread: (roomId: string) => void;
+  setActiveRoom: (roomId: string | null) => void;
+  initFromDb: (counts: Record<string, number>) => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
   unreadPerRoom: {},
+  activeRoomId: null,
 
   setUnread: (roomId, count) =>
     set((s) => ({ unreadPerRoom: { ...s.unreadPerRoom, [roomId]: count } })),
@@ -35,4 +38,12 @@ export const useChatStore = create<ChatState>((set) => ({
       delete next[roomId];
       return { unreadPerRoom: next };
     }),
+
+  setActiveRoom: (roomId) => set({ activeRoomId: roomId }),
+
+  /** Inisialisasi unread dari query DB (dipanggil saat fetchRooms selesai) */
+  initFromDb: (counts) =>
+    set((s) => ({
+      unreadPerRoom: { ...counts, ...s.unreadPerRoom }, // realtime increment menang
+    })),
 }));
