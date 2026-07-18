@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
+  Image,
   TouchableOpacity,
   ScrollView,
   Switch,
@@ -127,10 +128,17 @@ export default function PengaturanScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
         {/* Profil */}
         <View className="mx-4 mb-4 bg-white rounded-2xl p-4 border border-[#E8F6F3] flex-row items-center gap-4">
-          <View className="w-14 h-14 rounded-full bg-[#7ECDC0] items-center justify-center">
-            <Text className="text-xl font-bold text-white">
-              {getInitials(user?.nama ?? '?')}
-            </Text>
+          <View className="w-14 h-14 rounded-full bg-[#7ECDC0] items-center justify-center overflow-hidden">
+            {user?.avatar_url ? (
+              <Image
+                source={{ uri: user.avatar_url }}
+                style={{ width: 56, height: 56, borderRadius: 28 }}
+              />
+            ) : (
+              <Text className="text-xl font-bold text-white">
+                {getInitials(user?.nama ?? '?')}
+              </Text>
+            )}
           </View>
           <View className="flex-1">
             <Text className="text-base font-bold text-[#2D3436]">{user?.nama}</Text>

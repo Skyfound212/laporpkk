@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  View, Text, TouchableOpacity, FlatList, TextInput,
+  View, Text, Image, TouchableOpacity, FlatList, TextInput,
   RefreshControl, ActivityIndicator, StyleSheet, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,6 +22,7 @@ interface RoomItem {
   lastMessage?: string;
   lastSenderId?: string;
   unreadCount: number;
+  avatarUrl?: string;
 }
 
 // ─── Warna avatar deterministik ────────────────────────────────────────────────
@@ -49,15 +50,17 @@ function formatRoomTime(dateStr?: string): string {
 
 // ─── Komponen avatar ──────────────────────────────────────────────────────────
 
-function RoomAvatar({ name, type, isOnline }: { name: string; type: RoomItem['type']; isOnline?: boolean }) {
+function RoomAvatar({ name, type, isOnline, avatarUrl }: { name: string; type: RoomItem['type']; isOnline?: boolean; avatarUrl?: string }) {
   const letter = name.trim().charAt(0).toUpperCase();
   const bg = type === 'group' ? '#2E9F95' : type === 'admin' ? '#5C6BC0' : avatarColor(name);
   const icon = type === 'group' ? 'people' : type === 'admin' ? 'headset' : null;
 
   return (
     <View style={{ position: 'relative', marginRight: 12 }}>
-      <View style={[styles.avatar, { backgroundColor: bg }]}>
-        {icon ? (
+      <View style={[styles.avatar, { backgroundColor: bg, overflow: 'hidden' }]}>
+        {avatarUrl && type === 'private' ? (
+          <Image source={{ uri: avatarUrl }} style={{ width: 46, height: 46, borderRadius: 23 }} />
+        ) : icon ? (
           <Ionicons name={icon as any} size={22} color="#fff" />
         ) : (
           <Text style={styles.avatarText}>{letter}</Text>
@@ -109,7 +112,7 @@ export default function ChatScreen() {
       // 1. Ambil semua anggota selain diri sendiri
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, nama, jabatan')
+        .select('id, nama, jabatan, avatar_url')
         .neq('id', user.id)
         .eq('status', 'active')
         .order('nama', { ascending: true });
@@ -188,6 +191,7 @@ export default function ChatScreen() {
           name: m.nama,
           subtitle: m.jabatan,
           type: 'private',
+          avatarUrl: m.avatar_url ?? undefined,
           lastMessage: lm ? lastContent(lm) : undefined,
           lastMessageAt: lm?.created_at,
           lastSenderId: lm?.sender_id,
@@ -262,7 +266,7 @@ export default function ChatScreen() {
           item.type === 'admin' && styles.roomRowAdmin,
         ]}
       >
-        <RoomAvatar name={item.name} type={item.type} isOnline={isOnline} />
+        <RoomAvatar name={item.name} type={item.type} isOnline={isOnline} avatarUrl={item.avatarUrl} />
 
         <View style={{ flex: 1, minWidth: 0 }}>
           <View style={styles.roomMeta}>

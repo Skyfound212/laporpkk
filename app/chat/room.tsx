@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, FlatList,
+  View, Text, Image, TextInput, TouchableOpacity, FlatList,
   KeyboardAvoidingView, Platform, Alert, AppState, AppStateStatus,
   StyleSheet, Clipboard, Modal, Animated as RNAnimated,
 } from 'react-native';
@@ -35,7 +35,7 @@ interface Message {
   reply_to_id?: string | null;
   reply_to_content?: string | null;
   reply_to_sender_name?: string | null;
-  sender?: { nama: string };
+  sender?: { nama: string; avatar_url?: string | null };
 }
 
 type ListItem =
@@ -97,6 +97,7 @@ export default function ChatRoomScreen() {
   const [isOnline,      setIsOnline]      = useState(true);
   const [otherOnline,   setOtherOnline]   = useState(false);
   const [msgMenuTarget, setMsgMenuTarget] = useState<Message | null>(null);
+  const [otherAvatarUrl,  setOtherAvatarUrl]  = useState<string | null>(null);
 
   const flatListRef  = useRef<FlatList>(null);
   const swipeRefs    = useRef<Map<string, Swipeable | null>>(new Map());
@@ -108,13 +109,27 @@ export default function ChatRoomScreen() {
   const roomName = name || (isGroup ? 'Ruang Rumpi PKK' : isAdmin ? 'Chat Admin' : 'Chat');
   const listItems = buildListItems(messages);
 
+  // ── Fetch avatar lawan (private chat) ────────────────────────────────────
+
+  useEffect(() => {
+    if (!isPrivate || !profileId) return;
+    supabase
+      .from('profiles')
+      .select('avatar_url')
+      .eq('id', profileId)
+      .single()
+      .then(({ data }) => {
+        if (data?.avatar_url) setOtherAvatarUrl(data.avatar_url);
+      });
+  }, [isPrivate, profileId]);
+
   // ── Fetch ─────────────────────────────────────────────────────────────────
 
   const fetchMessages = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('messages')
-        .select('id, room_id, sender_id, content, type, created_at, reply_to_id, reply_to_content, reply_to_sender_name, sender:profiles(nama)')
+        .select('id, room_id, sender_id, content, type, created_at, reply_to_id, reply_to_content, reply_to_sender_name, sender:profiles(nama, avatar_url)')
         .eq('room_id', id)
         .order('created_at', { ascending: true });
 
@@ -123,7 +138,7 @@ export default function ChatRoomScreen() {
         (data ?? []).map((m: any) => ({
           ...m,
           status: 'sent' as const,
-          sender: m.sender ? { nama: m.sender.nama ?? 'Anggota' } : undefined,
+          sender: m.sender ? { nama: m.sender.nama ?? 'Anggota', avatar_url: m.sender.avatar_url ?? null } : undefined,
         }))
       );
     } catch (err) {
@@ -382,10 +397,17 @@ export default function ChatRoomScreen() {
           <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther, isContinued && { marginTop: 1 }]}>
             {/* Avatar lawan bicara */}
             {!isMe && (
-              <View style={[styles.msgAvatar, { opacity: showAvatar ? 1 : 0 }]}>
-                <Text style={styles.msgAvatarText}>
-                  {avatarLetter(item.sender?.nama ?? roomName)}
-                </Text>
+              <View style={[styles.msgAvatar, { opacity: showAvatar ? 1 : 0, overflow: 'hidden' }]}>
+                {item.sender?.avatar_url ? (
+                  <Image
+                    source={{ uri: item.sender.avatar_url }}
+                    style={{ width: 32, height: 32, borderRadius: 16 }}
+                  />
+                ) : (
+                  <Text style={styles.msgAvatarText}>
+                    {avatarLetter(item.sender?.nama ?? roomName)}
+                  </Text>
+                )}
               </View>
             )}
 
@@ -446,8 +468,12 @@ export default function ChatRoomScreen() {
         </TouchableOpacity>
 
         {/* Avatar kecil */}
-        <View style={styles.headerAvatar}>
-          <Text style={styles.headerAvatarText}>{avatarLetter(roomName)}</Text>
+        <View style={[styles.headerAvatar, { overflow: 'hidden' }]}>
+          {isPrivate && otherAvatarUrl ? (
+            <Image source={{ uri: otherAvatarUrl }} style={{ width: 38, height: 38, borderRadius: 19 }} />
+          ) : (
+            <Text style={styles.headerAvatarText}>{avatarLetter(roomName)}</Text>
+          )}
         </View>
 
         <View style={{ flex: 1, minWidth: 0 }}>
