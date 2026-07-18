@@ -8,8 +8,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  StyleSheet,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +18,7 @@ import { supabase } from '@/lib/supabase';
 
 export default function AktivasiScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [nik, setNik] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -55,43 +57,41 @@ export default function AktivasiScreen() {
   };
 
   return (
-    // SafeAreaView dari react-native-safe-area-context adalah komponen third-party.
-    // NativeWind v4 tidak otomatis menerapkan `className` ke komponen ini,
-    // sehingga `flex-1` tidak jalan → layar collapse → blank putih.
-    // Solusi: gunakan `style` prop langsung untuk flex dan background.
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#ffffff' }}>
+    // Gunakan View biasa + useSafeAreaInsets, bukan SafeAreaView third-party
+    // yang tidak di-support className NativeWind v4 secara otomatis.
+    <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
+        style={styles.flex}
       >
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1 }}
+          contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
           {/* Tombol kembali */}
           <TouchableOpacity
             onPress={() => router.back()}
-            className="px-6 pt-4 pb-2 self-start"
+            style={styles.backBtn}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Ionicons name="arrow-back" size={24} color="#636E72" />
           </TouchableOpacity>
 
           {/* Konten tengah */}
-          <View className="flex-1 px-6 justify-center py-8">
-            <View className="items-center mb-10">
-              <View className="w-20 h-20 rounded-2xl bg-[#7ECDC0] items-center justify-center mb-4">
+          <View style={styles.content}>
+            <View style={styles.headerSection}>
+              <View style={styles.iconWrap}>
                 <Ionicons name="key" size={40} color="white" />
               </View>
-              <Text className="text-2xl font-bold text-[#2D3436]">Aktivasi Akun</Text>
-              <Text className="text-sm text-[#636E72] mt-2 text-center px-4">
+              <Text style={styles.title}>Aktivasi Akun</Text>
+              <Text style={styles.subtitle}>
                 Masukkan NIK Anda untuk mengaktifkan akun PKK Digital dan mendapatkan ID login
               </Text>
             </View>
 
-            <View className="mb-4">
-              <Text className="text-sm font-semibold text-[#636E72] mb-2">NIK (16 digit)</Text>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>NIK (16 digit)</Text>
               <TextInput
                 keyboardType="number-pad"
                 maxLength={16}
@@ -99,51 +99,169 @@ export default function AktivasiScreen() {
                 onChangeText={setNik}
                 placeholder="Masukkan 16 digit NIK"
                 placeholderTextColor="#B2BEC3"
-                className="bg-[#F8FAFA] rounded-xl px-4 py-3.5 text-base text-[#2D3436]"
+                style={styles.input}
               />
               {nik.length > 0 && (
-                <Text className="text-xs text-[#B2BEC3] mt-1 text-right">
-                  {nik.length}/16
-                </Text>
+                <Text style={styles.counter}>{nik.length}/16</Text>
               )}
             </View>
 
-            <View className="bg-[#E8F6F3] rounded-xl p-4 mb-6">
-              <View className="flex-row items-start gap-3">
-                <Ionicons name="information-circle-outline" size={18} color="#5DB9AA" />
-                <Text className="text-xs text-[#636E72] flex-1 leading-5">
-                  Setelah aktivasi, sistem akan membuat <Text className="font-bold text-[#2D3436]">ID Anggota</Text> unik untuk login. Simpan ID tersebut dengan baik.
-                </Text>
-              </View>
+            <View style={styles.infoBox}>
+              <Ionicons name="information-circle-outline" size={18} color="#5DB9AA" />
+              <Text style={styles.infoText}>
+                Setelah aktivasi, sistem akan membuat{' '}
+                <Text style={styles.infoBold}>ID Anggota</Text> unik untuk login. Simpan ID tersebut dengan baik.
+              </Text>
             </View>
           </View>
 
-          {/* Tombol di bawah — mudah dijangkau */}
-          <View className="px-6 pb-8 gap-3">
+          {/* Tombol di bawah */}
+          <View style={styles.footer}>
             <TouchableOpacity
               onPress={handleAktivasi}
               disabled={loading || nik.length !== 16}
-              className="bg-[#7ECDC0] rounded-xl py-4 items-center"
-              style={{ opacity: loading || nik.length !== 16 ? 0.6 : 1 }}
+              style={[styles.btnPrimary, (loading || nik.length !== 16) && styles.btnDisabled]}
             >
               {loading ? (
                 <ActivityIndicator color="white" />
               ) : (
-                <Text className="text-white font-bold text-base">Verifikasi NIK</Text>
+                <Text style={styles.btnPrimaryText}>Verifikasi NIK</Text>
               )}
             </TouchableOpacity>
 
             <TouchableOpacity
               onPress={() => router.push('/(auth)/login')}
-              className="items-center py-3"
+              style={styles.btnSecondary}
             >
-              <Text className="text-[#7ECDC0] text-sm">
-                Sudah punya ID? <Text className="font-bold">Login</Text>
+              <Text style={styles.btnSecondaryText}>
+                Sudah punya ID? <Text style={styles.btnSecondaryBold}>Login</Text>
               </Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
+  flex: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  backBtn: {
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 8,
+    alignSelf: 'flex-start',
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 24,
+    justifyContent: 'center',
+    paddingVertical: 32,
+  },
+  headerSection: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  iconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 16,
+    backgroundColor: '#7ECDC0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2D3436',
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#636E72',
+    marginTop: 8,
+    textAlign: 'center',
+    paddingHorizontal: 16,
+  },
+  inputGroup: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#636E72',
+    marginBottom: 8,
+  },
+  input: {
+    backgroundColor: '#F8FAFA',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: '#2D3436',
+  },
+  counter: {
+    fontSize: 12,
+    color: '#B2BEC3',
+    marginTop: 4,
+    textAlign: 'right',
+  },
+  infoBox: {
+    backgroundColor: '#E8F6F3',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  infoText: {
+    fontSize: 12,
+    color: '#636E72',
+    flex: 1,
+    lineHeight: 20,
+  },
+  infoBold: {
+    fontWeight: 'bold',
+    color: '#2D3436',
+  },
+  footer: {
+    paddingHorizontal: 24,
+    paddingBottom: 32,
+    gap: 12,
+  },
+  btnPrimary: {
+    backgroundColor: '#7ECDC0',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  btnDisabled: {
+    opacity: 0.6,
+  },
+  btnPrimaryText: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  btnSecondary: {
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  btnSecondaryText: {
+    color: '#7ECDC0',
+    fontSize: 14,
+  },
+  btnSecondaryBold: {
+    fontWeight: 'bold',
+  },
+});
