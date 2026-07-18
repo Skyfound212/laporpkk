@@ -55,10 +55,14 @@ export default function AktivasiScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    // SafeAreaView dari react-native-safe-area-context adalah komponen third-party.
+    // NativeWind v4 tidak otomatis menerapkan `className` ke komponen ini,
+    // sehingga `flex-1` tidak jalan → layar collapse → blank putih.
+    // Solusi: gunakan `style` prop langsung untuk flex dan background.
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#ffffff' }}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        className="flex-1"
+        style={{ flex: 1 }}
       >
         <ScrollView
           contentContainerStyle={{ flexGrow: 1 }}

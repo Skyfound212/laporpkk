@@ -128,7 +128,7 @@ export default function SetupScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      className="flex-1 bg-white"
+      style={{ flex: 1, backgroundColor: '#ffffff' }}
     >
       <ScrollView
         contentContainerStyle={{ paddingBottom: 40 }}
