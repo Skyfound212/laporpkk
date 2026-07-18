@@ -186,15 +186,18 @@ export default function LoginScreen() {
 
         {/* Footer */}
         <View className="items-center pb-8">
-          <Text className="text-xs text-[#B2BEC3]">all designed by</Text>
-          <Text className="text-xs font-bold text-[#9CA3AF]">DV-G</Text>
-          {/* Admin gate tersembunyi */}
+          <Text className="text-sm text-[#5DB9AA]">all designed by</Text>
+          <Text className="text-sm font-bold text-[#2E9F95]">DV-G</Text>
+          {/* Tombol Admin */}
           <TouchableOpacity
             onPress={() => setShowAdminModal(true)}
-            className="mt-4 p-2"
+            className="mt-4 flex-row items-center bg-[#E8F6F3] px-4 py-2 rounded-full border border-[#C8EDE9]"
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            activeOpacity={0.7}
+            style={{ gap: 6 }}
           >
-            <Ionicons name="settings-outline" size={14} color="#E5E7EB" />
+            <Ionicons name="shield-checkmark-outline" size={16} color="#5DB9AA" />
+            <Text className="text-xs font-semibold text-[#5DB9AA]">Admin</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
