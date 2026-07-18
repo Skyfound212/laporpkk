@@ -193,3 +193,86 @@ export async function sendChatMessageNotification(
     profileId: senderProfileId ?? '',
   });
 }
+
+
+// ─── Notifikasi Post Baru ke Semua User ──────────────────────────────────────
+
+/** Kirim notif ke semua user aktif saat ada postingan baru (lonceng + push) */
+export async function sendPostNotificationToAll(
+  authorId: string,
+  authorName: string,
+  postContent: string,
+  postId: string
+): Promise<void> {
+  try {
+    // Ambil semua user aktif kecuali penulis
+    const { data: users } = await supabase
+      .from('profiles')
+      .select('id')
+      .neq('id', authorId)
+      .eq('status', 'active');
+
+    if (!users || users.length === 0) return;
+
+    const title = `📝 Update baru dari ${authorName}`;
+    const body = postContent.length > 80 ? postContent.slice(0, 77) + '...' : postContent;
+
+    // Tulis ke tabel notifications (ikon lonceng) untuk tiap user
+    await supabase.from('notifications').insert(
+      users.map((u) => ({
+        user_id: u.id,
+        title,
+        body,
+        type: 'post',
+        data: { postId, route: `/post/detail?id=${postId}` },
+      }))
+    );
+
+    // Kirim push ke perangkat masing-masing
+    const { data: tokens } = await supabase
+      .from('push_tokens')
+      .select('token')
+      .in('user_id', users.map((u) => u.id));
+
+    if (!tokens || tokens.length === 0) return;
+
+    await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(
+        tokens.map((t: any) => ({
+          to: t.token,
+          sound: 'default',
+          title,
+          body,
+          data: { type: 'post', postId },
+        }))
+      ),
+    });
+  } catch (err) {
+    console.error('Error sending post notification:', err);
+  }
+}
+
+// ─── Notifikasi Agenda ────────────────────────────────────────────────────────
+
+/** Notif agenda sedang berlangsung / akan datang (lonceng + push lokal) */
+export async function sendAgendaNotification(
+  userId: string,
+  agendaTitle: string,
+  agendaId: string,
+  status: 'ongoing' | 'upcoming'
+): Promise<void> {
+  const title = status === 'ongoing'
+    ? '📅 Agenda sedang berlangsung'
+    : '🔔 Agenda akan segera dimulai';
+  const body = agendaTitle;
+
+  await Promise.all([
+    sendLocalNotification(title, body, { type: 'agenda', agendaId }),
+    insertInAppNotification(userId, title, body, 'agenda', {
+      agendaId,
+      route: `/agenda/detail?id=${agendaId}`,
+    }),
+  ]);
+}

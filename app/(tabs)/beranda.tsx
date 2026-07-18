@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,15 +8,19 @@ import {
   RefreshControl,
   StyleSheet,
   Image,
+  Modal,
   Dimensions,
   ActivityIndicator,
   StatusBar,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { useAuthStore } from '@/stores/authStore';
+import { sendAgendaNotification, insertInAppNotification, sendLocalNotification } from '@/lib/notifications';
+import * as Updates from 'expo-updates';
 import { supabase } from '@/lib/supabase';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -262,6 +266,9 @@ export default function BerandaScreen() {
   const [currentTime,   setCurrentTime]   = useState(new Date());
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
   const [error,         setError]         = useState<string | null>(null);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [updatingNow,     setUpdatingNow]     = useState(false);
+  const notifiedAgendaRef = useRef<string | null>(null);
 
   // ── Derived values ────────────────────────────────────────────────────────────
   const hour      = currentTime.getHours();
@@ -274,6 +281,49 @@ export default function BerandaScreen() {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
+
+  // ── Cek pembaruan aplikasi (expo-updates) ────────────────────────────────────
+  useEffect(() => {
+    const checkUpdate = async () => {
+      try {
+        if (!Updates.isEnabled) return; // hanya di production build
+        const result = await Updates.checkForUpdateAsync();
+        if (result.isAvailable) {
+          setUpdateAvailable(true);
+          if (user?.id) {
+            // Tulis ke lonceng + push lokal
+            await insertInAppNotification(
+              user.id,
+              '🔔 Pembaruan PKK Digital tersedia',
+              'Versi terbaru telah tersedia dengan fitur dan perbaikan terkini.',
+              'app_update',
+              {}
+            );
+            await sendLocalNotification(
+              '🔔 Pembaruan PKK Digital tersedia',
+              'Versi terbaru telah tersedia. Perbarui sekarang.'
+            );
+          }
+        }
+      } catch {
+        // Abaikan jika bukan production build (mis. Expo Go)
+      }
+    };
+    checkUpdate();
+  }, [user?.id]);
+
+  // ── Notifikasi agenda aktif (lonceng + push lokal) ───────────────────────────
+  useEffect(() => {
+    if (!liveEvent || !user?.id) return;
+    if (notifiedAgendaRef.current === liveEvent.id) return; // sudah dinotif
+    notifiedAgendaRef.current = liveEvent.id;
+    sendAgendaNotification(
+      user.id,
+      liveEvent.title,
+      liveEvent.id,
+      liveEvent.status as 'ongoing' | 'upcoming'
+    ).catch(console.error);
+  }, [liveEvent?.id, user?.id]);
 
   // ── Fetch semua data ────────────────────────────────────────────────────────
   const fetchData = useCallback(async (isRefresh = false) => {
@@ -428,6 +478,18 @@ export default function BerandaScreen() {
 
     return () => { supabase.removeChannel(presenceChannel); };
   }, [user?.id]);
+
+  // ── Handler update aplikasi ────────────────────────────────────────────────
+  const handleUpdate = async () => {
+    try {
+      setUpdatingNow(true);
+      await Updates.fetchUpdateAsync();
+      await Updates.reloadAsync();
+    } catch {
+      setUpdatingNow(false);
+      Alert.alert('Gagal Update', 'Tidak dapat mengunduh pembaruan. Coba lagi.');
+    }
+  };
 
   // ── Render: Story item ──────────────────────────────────────────────────────
   const renderStory = useCallback(({ item }: { item: StoryItem }) => {
@@ -790,6 +852,56 @@ Agenda" onPress={() => router.push('/agenda/detail' as any)} />
         <View style={{ height: 100 }} />
 
       </ScrollView>
+
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/*  UPDATE MODAL — hanya dismiss via tombol Update Sekarang           */}
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      <Modal
+        visible={updateAvailable}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => { /* sengaja dikosongkan — tidak bisa ditutup */ }}
+      >
+        <View style={styles.updateOverlay}>
+          <View style={styles.updateCard}>
+            <LinearGradient colors={[C.darker, C.primary]} style={styles.updateIconWrap}>
+              <Ionicons name="download" size={34} color="#fff" />
+            </LinearGradient>
+            <Text style={styles.updateTitle}>Pembaruan Tersedia</Text>
+            <Text style={styles.updateBody}>
+              Versi terbaru PKK Digital telah tersedia dengan fitur{'
+'}
+              dan perbaikan terkini. Perbarui sekarang untuk{'
+'}
+              mendapatkan pengalaman terbaik.
+            </Text>
+            <TouchableOpacity
+              style={styles.updateBtn}
+              onPress={handleUpdate}
+              disabled={updatingNow}
+              activeOpacity={0.85}
+            >
+              <LinearGradient
+                colors={[C.darker, C.primary]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.updateBtnGrad}
+              >
+                {updatingNow ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="download-outline" size={18} color="#fff" />
+                    <Text style={styles.updateBtnText}>Update Sekarang</Text>
+                  </>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -1347,6 +1459,69 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
+    letterSpacing: 0.2,
+  },
+
+  // ── Update Modal ─────────────────────────────────────────────────────────────
+  updateOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+  },
+  updateCard: {
+    backgroundColor: '#fff',
+    borderRadius: 28,
+    padding: 30,
+    alignItems: 'center',
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 14,
+  },
+  updateIconWrap: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 18,
+  },
+  updateTitle: {
+    fontSize: 21,
+    fontWeight: '800',
+    color: '#111827',
+    marginBottom: 12,
+    textAlign: 'center',
+    letterSpacing: -0.3,
+  },
+  updateBody: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 26,
+  },
+  updateBtn: {
+    borderRadius: 30,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  updateBtnGrad: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 9,
+    paddingVertical: 15,
+    paddingHorizontal: 24,
+  },
+  updateBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
     letterSpacing: 0.2,
   },
 

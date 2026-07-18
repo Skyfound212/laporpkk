@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase';
+import { sendPostNotificationToAll } from '@/lib/notifications';
 
 export default function TextOnlyPostScreen() {
   const router = useRouter();
@@ -29,15 +30,23 @@ export default function TextOnlyPostScreen() {
 
     setLoading(true);
     try {
-      const { error } = await supabase.from('posts').insert({
+      const { data: newPost, error } = await supabase.from('posts').insert({
         user_id: user?.id,
         content: content.trim(),
         category: category || 'Informasi Umum',
         type: 'text',
         status: 'published',
-      });
+      }).select('id').single();
 
       if (error) throw error;
+
+      // Kirim notifikasi ke semua anggota lain (non-blocking)
+      sendPostNotificationToAll(
+        user?.id ?? '',
+        user?.nama ?? 'Anggota PKK',
+        content.trim(),
+        newPost?.id ?? ''
+      ).catch(console.error);
 
       Alert.alert('Sukses', 'Postingan berhasil dipublikasikan', [
         { text: 'OK', onPress: () => router.push('/(tabs)/beranda') },

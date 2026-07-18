@@ -30,11 +30,13 @@ interface NotificationItem {
 // ─── Helper ────────────────────────────────────────────────────────────────────
 
 const TYPE_META: Record<string, { icon: keyof typeof Ionicons.glyphMap; color: string; bg: string }> = {
-  laporan: { icon: 'document-text',  color: '#2E9F95', bg: '#DFF4F2' },
-  agenda:  { icon: 'calendar',        color: '#7C3AED', bg: '#EDE9FE' },
-  chat:    { icon: 'chatbubbles',     color: '#2563EB', bg: '#DBEAFE' },
-  post:    { icon: 'newspaper',       color: '#D97706', bg: '#FEF3C7' },
-  general: { icon: 'notifications',   color: '#6B7280', bg: '#F3F4F6' },
+  laporan:    { icon: 'document-text',     color: '#2E9F95', bg: '#DFF4F2' },
+  agenda:     { icon: 'calendar',           color: '#7C3AED', bg: '#EDE9FE' },
+  chat:       { icon: 'chatbubbles',        color: '#2563EB', bg: '#DBEAFE' },
+  post:       { icon: 'newspaper',          color: '#D97706', bg: '#FEF3C7' },
+  app_update: { icon: 'download',           color: '#059669', bg: '#D1FAE5' },
+  system:     { icon: 'information-circle', color: '#6366F1', bg: '#EEF2FF' },
+  general:    { icon: 'notifications',      color: '#6B7280', bg: '#F3F4F6' },
 };
 
 function getTypeMeta(type: string) {

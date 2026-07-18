@@ -6,6 +6,7 @@ import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase';
+import { sendPostNotificationToAll } from '@/lib/notifications';
 
 export default function ImageCaptionScreen() {
   const router = useRouter();
@@ -60,16 +61,23 @@ export default function ImageCaptionScreen() {
         imageUrls.push(publicUrl);
       }
 
-      const { error } = await supabase.from('posts').insert({
+      const { data: newPost, error } = await supabase.from('posts').insert({
         user_id: user?.id,
         content: caption.trim(),
         category: category || 'Dokumentasi Kegiatan',
         type: 'image',
         images: imageUrls,
         status: 'published',
-      });
+      }).select('id').single();
 
       if (error) throw error;
+
+      sendPostNotificationToAll(
+        user?.id ?? '',
+        user?.nama ?? 'Anggota PKK',
+        caption.trim() || '📷 Postingan foto baru',
+        newPost?.id ?? ''
+      ).catch(console.error);
 
       Alert.alert('Sukses', 'Postingan berhasil dipublikasikan', [
         { text: 'OK', onPress: () => router.push('/(tabs)/beranda') },
