@@ -30,8 +30,7 @@
       "autoIncrement": true,
       "resourceClass": "medium",
       "android": {
-        "buildType": "app-bundle",
-        "gradleCommand": ":app:bundleRelease"
+        "buildType": "apk"
       },
       "channel": "production",
       "env": {
