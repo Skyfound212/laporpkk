@@ -9,8 +9,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Modal,
-  Clipboard,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
@@ -115,8 +115,8 @@ export default function SetupScreen() {
     }
   };
 
-  const handleCopyId = () => {
-    Clipboard.setString(generatedId);
+  const handleCopyId = async () => {
+    await Clipboard.setStringAsync(generatedId);
     Alert.alert('Disalin', 'ID Anggota berhasil disalin ke clipboard');
   };
 
