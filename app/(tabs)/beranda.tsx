@@ -36,6 +36,7 @@ interface StoryItem {
   nama: string;
   jabatan: string;
   user_id: string;
+  avatar_url?: string;
   isOnline?: boolean;
 }
 
@@ -192,11 +193,18 @@ export default function BerandaScreen() {
   const fetchStories = async () => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, nama, jabatan')
+      .select('id, nama, jabatan, avatar_url')
+      .neq('id', user?.id)   // exclude diri sendiri — tampil sebagai "Anda" di kiri
       .limit(12);
 
     if (error) throw error;
-    setStories((data ?? []).map((u: any) => ({ id: u.id, nama: u.nama, jabatan: u.jabatan, user_id: u.id })));
+    setStories((data ?? []).map((u: any) => ({
+      id: u.id,
+      nama: u.nama,
+      jabatan: u.jabatan,
+      user_id: u.id,
+      avatar_url: u.avatar_url ?? undefined,
+    })));
   };
 
   const fetchLiveEvent = async () => {
@@ -301,14 +309,21 @@ export default function BerandaScreen() {
           end={{ x: 1, y: 1 }}
           style={styles.storyGradientRing}
         >
-          <LinearGradient
-            colors={G.avatar}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.storyAvatar}
-          >
-            <Text style={styles.storyAvatarText}>{getInitials(item.nama)}</Text>
-          </LinearGradient>
+          {item.avatar_url ? (
+            <Image
+              source={{ uri: item.avatar_url }}
+              style={styles.storyAvatar}
+            />
+          ) : (
+            <LinearGradient
+              colors={G.avatar}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.storyAvatar}
+            >
+              <Text style={styles.storyAvatarText}>{getInitials(item.nama)}</Text>
+            </LinearGradient>
+          )}
         </LinearGradient>
 
         {/* Titik indikator online */}
@@ -489,16 +504,23 @@ export default function BerandaScreen() {
                     end={{ x: 1, y: 1 }}
                     style={styles.storyGradientRing}
                   >
-                    <LinearGradient
-                      colors={G.avatarSelf}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.storyAvatar}
-                    >
-                      <Text style={styles.storyAvatarText}>
-                        {getInitials(user?.nama ?? '?')}
-                      </Text>
-                    </LinearGradient>
+                    {user?.avatar_url ? (
+                      <Image
+                        source={{ uri: user.avatar_url }}
+                        style={styles.storyAvatar}
+                      />
+                    ) : (
+                      <LinearGradient
+                        colors={G.avatarSelf}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.storyAvatar}
+                      >
+                        <Text style={styles.storyAvatarText}>
+                          {getInitials(user?.nama ?? '?')}
+                        </Text>
+                      </LinearGradient>
+                    )}
                   </LinearGradient>
                   <Text style={[styles.storyName, { color: C.gold, fontWeight: '700' }]}>Anda</Text>
                 </TouchableOpacity>
