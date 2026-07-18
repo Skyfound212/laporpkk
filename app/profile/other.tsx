@@ -50,7 +50,7 @@ export default function OtherProfileScreen() {
       // Fetch profile
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select('id, nama, jabatan, nik, no_hp, email, alamat, created_at')
+        .select('id, nama, jabatan, nik, no_hp, email, alamat, created_at, avatar_url')
         .eq('id', id)
         .single();
 
@@ -171,10 +171,14 @@ export default function OtherProfileScreen() {
         <View className="px-4 py-6 items-center">
           {/* Avatar with online dot */}
           <View className="relative mb-3">
-            <View className="w-24 h-24 rounded-full bg-[#7ECDC0] items-center justify-center border-4 border-[#E8F6F3]">
-              <Text className="text-white text-3xl font-bold">
-                {profile.nama.charAt(0).toUpperCase()}
-              </Text>
+            <View className="w-24 h-24 rounded-full bg-[#7ECDC0] items-center justify-center border-4 border-[#E8F6F3] overflow-hidden">
+              {profile.avatar_url ? (
+                <Image source={{ uri: profile.avatar_url }} style={{ width: 96, height: 96, borderRadius: 48 }} />
+              ) : (
+                <Text className="text-white text-3xl font-bold">
+                  {profile.nama.charAt(0).toUpperCase()}
+                </Text>
+              )}
             </View>
             {profile.is_online && (
               <View className="absolute bottom-1 right-1 w-4 h-4 rounded-full bg-[#00B894] border-2 border-white" />
