@@ -1,6 +1,6 @@
 import { View, Text, TouchableOpacity, Modal, Pressable, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
-import { FontAwesome5, MaterialIcons, Ionicons } from '@expo/vector-icons';
+import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
@@ -150,20 +150,6 @@ export default function PostOptionsScreen() {
                 <Ionicons name="chevron-forward" size={20} color="#B2BEC3" />
               </TouchableOpacity>
 
-              {/* Pilih Template */}
-              <TouchableOpacity
-                onPress={() => handleSelect('/post/template')}
-                className="flex-row items-center p-4 rounded-2xl bg-[#E8F6F3] active:bg-[#7ECDC0]/20"
-              >
-                <View className="w-12 h-12 rounded-xl items-center justify-center mr-4 bg-[#FDCB6E20]">
-                  <MaterialIcons name="view-agenda" size={24} color="#FDCB6E" />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-base font-semibold text-[#2D3436]">Pilih Template</Text>
-                  <Text className="text-sm text-[#636E72] mt-0.5">Gunakan template postingan siap pakai</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color="#B2BEC3" />
-              </TouchableOpacity>
 
             </View>
           )}
