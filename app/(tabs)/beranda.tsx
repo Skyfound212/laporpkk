@@ -462,7 +462,107 @@ export default function BerandaScreen() {
         contentContainerStyle={{ paddingBottom: 130 }}
       >
 
-        {/* ── Live Event Card ─────────────────────────────────────────────── */}
+        {/* ── Stories (Anggota Aktif) ──────────────────────────────────────── */}
+        {stories.length > 0 && (
+          <View style={styles.storiesSection}>
+            <View style={styles.sectionTitleRow}>
+              <View style={styles.sectionAccentBar} />
+              <Text style={styles.sectionTitle}>Anggota Aktif</Text>
+            </View>
+            <FlatList
+              data={stories}
+              renderItem={renderStory}
+              keyExtractor={(item) => item.id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 16 }}
+              ListHeaderComponent={() => (
+                <TouchableOpacity
+                  onPress={() => router.push('/profile')}
+                  style={styles.storyItem}
+                  activeOpacity={0.8}
+                >
+                  {/* Ring emas untuk "Anda" */}
+                  <LinearGradient
+                    colors={[C.gold, '#E8C26A']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.storyGradientRing}
+                  >
+                    <LinearGradient
+                      colors={G.avatarSelf}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.storyAvatar}
+                    >
+                      <Text style={styles.storyAvatarText}>
+                        {getInitials(user?.nama ?? '?')}
+                      </Text>
+                    </LinearGradient>
+                  </LinearGradient>
+                  <Text style={[styles.storyName, { color: C.gold, fontWeight: '700' }]}>Anda</Text>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        )}
+
+        {/* ── Aksi Cepat ──────────────────────────────────────────────────── */}
+        <View style={styles.section}>
+          <View style={styles.sectionTitleRow}>
+            <View style={styles.sectionAccentBar} />
+            <Text style={styles.sectionTitle}>Aksi Cepat</Text>
+          </View>
+          <View style={styles.aksiRow}>
+
+            <TouchableOpacity
+              style={styles.aksiCard}
+              onPress={() => router.push('/laporan/form')}
+              activeOpacity={0.82}
+            >
+              <LinearGradient colors={G.aksiIcon} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.aksiIcon}>
+                <Ionicons name="document-text" size={22} color={C.dark} />
+              </LinearGradient>
+              <Text style={styles.aksiLabel}>Buat{'\n'}Laporan</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.aksiCard}
+              onPress={() => router.push('/agenda/form')}
+              activeOpacity={0.82}
+            >
+              <LinearGradient colors={G.aksiIcon} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.aksiIcon}>
+                <Ionicons name="calendar" size={22} color={C.dark} />
+              </LinearGradient>
+              <Text style={styles.aksiLabel}>Buat{'\n'}Agenda</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.aksiCard}
+              onPress={() => router.push('/chat/admin')}
+              activeOpacity={0.82}
+            >
+              <LinearGradient colors={G.aksiIcon} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.aksiIcon}>
+                <Ionicons name="chatbubbles" size={22} color={C.dark} />
+              </LinearGradient>
+              <Text style={styles.aksiLabel}>Chat{'\n'}Admin</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.aksiCard}
+              onPress={() => router.push('/agenda/detail' as any)}
+              activeOpacity={0.82}
+            >
+              <LinearGradient colors={G.aksiIcon} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.aksiIcon}>
+                <Ionicons name="calendar-outline" size={22} color={C.dark} />
+              </LinearGradient>
+              <Text style={styles.aksiLabel}>Lihat{'\n'}Agenda</Text>
+            </TouchableOpacity>
+
+          </View>
+        </View>
+
+        {/* ── Live Event Card (Agenda) ─────────────────────────────────────── */}
         <View style={styles.liveSection}>
           {liveEvent ? (
             <TouchableOpacity
@@ -522,106 +622,6 @@ export default function BerandaScreen() {
             </LinearGradient>
           )}
         </View>
-
-        {/* ── Aksi Cepat ──────────────────────────────────────────────────── */}
-        <View style={styles.section}>
-          <View style={styles.sectionTitleRow}>
-            <View style={styles.sectionAccentBar} />
-            <Text style={styles.sectionTitle}>Aksi Cepat</Text>
-          </View>
-          <View style={styles.aksiRow}>
-
-            <TouchableOpacity
-              style={styles.aksiCard}
-              onPress={() => router.push('/laporan/form')}
-              activeOpacity={0.82}
-            >
-              <LinearGradient colors={G.aksiIcon} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.aksiIcon}>
-                <Ionicons name="document-text" size={22} color={C.dark} />
-              </LinearGradient>
-              <Text style={styles.aksiLabel}>Buat{'\n'}Laporan</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.aksiCard}
-              onPress={() => router.push('/agenda/form')}
-              activeOpacity={0.82}
-            >
-              <LinearGradient colors={G.aksiIcon} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.aksiIcon}>
-                <Ionicons name="calendar" size={22} color={C.dark} />
-              </LinearGradient>
-              <Text style={styles.aksiLabel}>Buat{'\n'}Agenda</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.aksiCard}
-              onPress={() => router.push('/chat/admin')}
-              activeOpacity={0.82}
-            >
-              <LinearGradient colors={G.aksiIcon} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.aksiIcon}>
-                <Ionicons name="chatbubbles" size={22} color={C.dark} />
-              </LinearGradient>
-              <Text style={styles.aksiLabel}>Chat{'\n'}Admin</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.aksiCard}
-              onPress={() => router.push('/agenda/detail' as any)}
-              activeOpacity={0.82}
-            >
-              <LinearGradient colors={G.aksiIcon} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.aksiIcon}>
-                <Ionicons name="calendar-outline" size={22} color={C.dark} />
-              </LinearGradient>
-              <Text style={styles.aksiLabel}>Lihat{'\n'}Agenda</Text>
-            </TouchableOpacity>
-
-          </View>
-        </View>
-
-        {/* ── Stories (Anggota Aktif) ──────────────────────────────────────── */}
-        {stories.length > 0 && (
-          <View style={styles.storiesSection}>
-            <View style={styles.sectionTitleRow}>
-              <View style={styles.sectionAccentBar} />
-              <Text style={styles.sectionTitle}>Anggota Aktif</Text>
-            </View>
-            <FlatList
-              data={stories}
-              renderItem={renderStory}
-              keyExtractor={(item) => item.id}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: 16 }}
-              ListHeaderComponent={() => (
-                <TouchableOpacity
-                  onPress={() => router.push('/profile')}
-                  style={styles.storyItem}
-                  activeOpacity={0.8}
-                >
-                  {/* Ring emas untuk "Anda" */}
-                  <LinearGradient
-                    colors={[C.gold, '#E8C26A']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.storyGradientRing}
-                  >
-                    <LinearGradient
-                      colors={G.avatarSelf}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.storyAvatar}
-                    >
-                      <Text style={styles.storyAvatarText}>
-                        {getInitials(user?.nama ?? '?')}
-                      </Text>
-                    </LinearGradient>
-                  </LinearGradient>
-                  <Text style={[styles.storyName, { color: C.gold, fontWeight: '700' }]}>Anda</Text>
-                </TouchableOpacity>
-              )}
-            />
-          </View>
-        )}
 
         {/* ── Feed: Update Anggota ─────────────────────────────────────────── */}
         <View style={styles.section}>
@@ -688,7 +688,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 30,
+    paddingTop: 52,
     paddingBottom: 50,
     borderBottomLeftRadius: 36,
     borderBottomRightRadius: 36,
