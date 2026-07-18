@@ -1,4 +1,5 @@
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
@@ -69,7 +70,7 @@ export default function LaporanFormScreen() {
   );
 
   return (
-    <View className="flex-1 bg-white">
+    <SafeAreaView className="flex-1 bg-white" edges={['top']}>
       {/* Header */}
       <View className="flex-row items-center justify-between px-4 py-3 border-b border-tosca-light">
         <TouchableOpacity onPress={() => router.back()}>
@@ -90,6 +91,6 @@ export default function LaporanFormScreen() {
         {renderInput('Kendala', kendala, setKendala, 'Apa kendala yang dihadapi? (opsional)', true)}
         {renderInput('Rekomendasi', rekomendasi, setRekomendasi, 'Rekomendasi untuk ke depan? (opsional)', true)}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }

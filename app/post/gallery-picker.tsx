@@ -1,4 +1,5 @@
 import { View, Text, TouchableOpacity, FlatList, Image, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useState, useEffect } from 'react';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
@@ -103,7 +104,7 @@ export default function GalleryPickerScreen() {
   );
 
   return (
-    <View className="flex-1 bg-white">
+    <SafeAreaView className="flex-1 bg-white" edges={['top']}>
       {/* Header */}
       <View className="flex-row items-center justify-between px-4 py-3 border-b border-[#E8F6F3]">
         <TouchableOpacity onPress={() => router.back()}>
@@ -151,6 +152,6 @@ export default function GalleryPickerScreen() {
           showsVerticalScrollIndicator={false}
         />
       )}
-    </View>
+    </SafeAreaView>
   );
 }

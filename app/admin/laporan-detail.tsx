@@ -114,7 +114,7 @@ export default function AdminLaporanDetailScreen() {
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-[#F8FAFA]">
+    <SafeAreaView className="flex-1 bg-[#F8FAFA]" edges={['top']}>
       {/* Header */}
       <View className="bg-white px-4 py-3 border-b border-[#E8F6F3] flex-row items-center">
         <TouchableOpacity onPress={() => router.back()} className="mr-3">

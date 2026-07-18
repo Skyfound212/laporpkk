@@ -1,4 +1,5 @@
 import { View, Text, TouchableOpacity, FlatList, Image, RefreshControl, Alert, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useState, useEffect, useCallback } from 'react';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
@@ -125,15 +126,15 @@ export default function OtherProfileScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 bg-white items-center justify-center">
+      <SafeAreaView className="flex-1 bg-white items-center justify-center" edges={['top']}>
         <Text className="text-[#636E72]">Memuat profil...</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (!profile) {
     return (
-      <View className="flex-1 bg-white items-center justify-center px-8">
+      <SafeAreaView className="flex-1 bg-white items-center justify-center px-8" edges={['top']}>
         <MaterialIcons name="person-off" size={48} color="#B2BEC3" />
         <Text className="text-[#636E72] text-center mt-4">Profil tidak ditemukan</Text>
         <TouchableOpacity 
@@ -142,12 +143,12 @@ export default function OtherProfileScreen() {
         >
           <Text className="text-white font-semibold">Kembali</Text>
         </TouchableOpacity>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View className="flex-1 bg-white">
+    <SafeAreaView className="flex-1 bg-white" edges={['top']}>
       {/* Header */}
       <View className="flex-row items-center px-4 py-3 border-b border-[#E8F6F3]">
         <TouchableOpacity onPress={() => router.back()} className="mr-4">
@@ -319,6 +320,6 @@ export default function OtherProfileScreen() {
           </View>
         )}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }

@@ -1,4 +1,5 @@
 import { View, Text, TouchableOpacity, ScrollView, Alert, RefreshControl } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useState, useEffect, useCallback } from 'react';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
@@ -91,28 +92,28 @@ export default function AgendaDetailScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 bg-white items-center justify-center">
+      <SafeAreaView className="flex-1 bg-white items-center justify-center" edges={['top']}>
         <Text className="text-secondary">Memuat detail...</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (!agenda) {
     return (
-      <View className="flex-1 bg-white items-center justify-center px-8">
+      <SafeAreaView className="flex-1 bg-white items-center justify-center px-8" edges={['top']}>
         <MaterialIcons name="event-busy" size={48} color="#B2BEC3" />
         <Text className="text-secondary text-center mt-4">Agenda tidak ditemukan</Text>
         <TouchableOpacity onPress={() => router.back()} className="mt-4 px-6 py-2 rounded-full bg-tosca">
           <Text className="text-white font-semibold">Kembali</Text>
         </TouchableOpacity>
-      </View>
+      </SafeAreaView>
     );
   }
 
   const config = statusConfig[agenda.status];
 
   return (
-    <View className="flex-1 bg-white">
+    <SafeAreaView className="flex-1 bg-white" edges={['top']}>
       <View className="flex-row items-center justify-between px-4 py-3 border-b border-tosca-light">
         <TouchableOpacity onPress={() => router.back()}><Ionicons name="arrow-back" size={24} color="#636E72" /></TouchableOpacity>
         <Text className="text-lg font-bold text-primary">Detail Kegiatan</Text>
@@ -189,6 +190,6 @@ export default function AgendaDetailScreen() {
           </View>
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }

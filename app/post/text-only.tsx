@@ -1,4 +1,5 @@
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
@@ -49,7 +50,7 @@ export default function TextOnlyPostScreen() {
   };
 
   return (
-    <View className="flex-1 bg-white">
+    <SafeAreaView className="flex-1 bg-white" edges={['top']}>
       {/* Header */}
       <View className="flex-row items-center justify-between px-4 py-3 border-b border-[#E8F6F3]">
         <TouchableOpacity onPress={() => router.back()}>
@@ -111,6 +112,6 @@ value={content}
           ))}
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }

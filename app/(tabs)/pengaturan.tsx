@@ -118,7 +118,7 @@ export default function PengaturanScreen() {
     name.split(' ').slice(0, 2).map((w) => w[0]?.toUpperCase()).join('');
 
   return (
-    <SafeAreaView className="flex-1 bg-[#F8FBFB]">
+    <SafeAreaView className="flex-1 bg-[#F8FBFB]" edges={['top']}>
       {/* Header */}
       <View className="px-5 pt-4 pb-3">
         <Text className="text-xl font-bold text-[#2D3436]">Pengaturan</Text>

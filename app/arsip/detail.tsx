@@ -1,4 +1,5 @@
 import { View, Text, TouchableOpacity, Alert, Linking, RefreshControl, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useState, useEffect, useCallback } from 'react';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
@@ -137,15 +138,15 @@ export default function ArsipDetailScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 bg-white items-center justify-center">
+      <SafeAreaView className="flex-1 bg-white items-center justify-center" edges={['top']}>
         <Text className="text-[#636E72]">Memuat detail...</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (!arsip) {
     return (
-      <View className="flex-1 bg-white items-center justify-center px-8">
+      <SafeAreaView className="flex-1 bg-white items-center justify-center px-8" edges={['top']}>
         <MaterialIcons name="folder-off" size={48} color="#B2BEC3" />
         <Text className="text-[#636E72] text-center mt-4">Dokumen tidak ditemukan</Text>
         <TouchableOpacity 
@@ -154,7 +155,7 @@ export default function ArsipDetailScreen() {
         >
           <Text className="text-white font-semibold">Kembali</Text>
         </TouchableOpacity>
-      </View>
+      </SafeAreaView>
     );
   }
 
@@ -163,7 +164,7 @@ export default function ArsipDetailScreen() {
   const isUploader = arsip.uploaded_by === user?.id;
 
   return (
-    <View className="flex-1 bg-white">
+    <SafeAreaView className="flex-1 bg-white" edges={['top']}>
       {/* Header */}
       <View className="flex-row items-center justify-between px-4 py-3 border-b border-[#E8F6F3]">
         <TouchableOpacity onPress={() => router.back()}>
@@ -275,6 +276,6 @@ export default function ArsipDetailScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }

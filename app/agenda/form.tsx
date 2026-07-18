@@ -1,4 +1,5 @@
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useState, useEffect } from 'react';
 import { Ionicons } from '@expo/vector-icons';
@@ -109,7 +110,7 @@ export default function AgendaFormScreen() {
   };
 
   return (
-    <View className="flex-1 bg-white">
+    <SafeAreaView className="flex-1 bg-white" edges={['top']}>
       <View className="flex-row items-center justify-between px-4 py-3 border-b border-tosca-light">
         <TouchableOpacity onPress={() => router.back()}><Ionicons name="close" size={24} color="#636E72" /></TouchableOpacity>
         <Text className="text-lg font-bold text-primary">{isEdit ? 'Edit Agenda' : 'Agenda Baru'}</Text>
@@ -171,6 +172,6 @@ value={location} onChangeText={setLocation}
           </View>
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
