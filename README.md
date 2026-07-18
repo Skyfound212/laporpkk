@@ -1,6 +1,6 @@
 # PKK Digital
 
-Aplikasi internal Android untuk anggota PKK RW 212 — Kelurahan Sumberrejo.
+Aplikasi internal Android untuk anggota PKK — Kelurahan Warakas .
 
 ## Fitur
 
