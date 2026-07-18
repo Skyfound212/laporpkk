@@ -2,6 +2,7 @@ import { View, Text, TextInput, TouchableOpacity, ScrollView, Image, FlatList, A
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
+import * as FileSystem from 'expo-file-system';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase';
 
@@ -38,12 +39,16 @@ export default function ImageCaptionScreen() {
         const fileName = `post_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
         const filePath = `posts/${user?.id}/${fileName}`;
 
-        const response = await fetch(uri);
-        const blob = await response.blob();
+        // fetch().blob() tidak reliable untuk URI lokal di React Native.
+        // Gunakan FileSystem base64 → Uint8Array (sama seperti upload avatar).
+        const base64 = await FileSystem.readAsStringAsync(uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        const byteArray = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
 
         const { error: uploadError } = await supabase.storage
           .from('post-images')
-          .upload(filePath, blob, { contentType: 'image/jpeg' });
+          .upload(filePath, byteArray, { contentType: 'image/jpeg' });
 
         if (uploadError) throw uploadError;
 

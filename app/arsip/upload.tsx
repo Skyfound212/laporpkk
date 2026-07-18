@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase';
 
@@ -63,12 +64,16 @@ export default function ArsipUploadScreen() {
       const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
       const filePath = `arsip/${fileName}`;
 
-      const response = await fetch(file.uri);
-      const blob = await response.blob();
+      // fetch().blob() tidak reliable untuk URI lokal di React Native.
+      // Gunakan FileSystem base64 → Uint8Array.
+      const base64 = await FileSystem.readAsStringAsync(file.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      const byteArray = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
 
       const { error: uploadError } = await supabase.storage
         .from('documents')
-        .upload(filePath, blob, {
+        .upload(filePath, byteArray, {
           contentType: file.type,
           upsert: false,
         });
