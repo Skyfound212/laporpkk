@@ -1,6 +1,8 @@
 # PKK Digital
 
-Aplikasi internal Android untuk anggota PKK — Kelurahan Warakas .
+[![EAS Update (OTA)](https://github.com/Skyfound212/laporpkk/actions/workflows/eas-update.yml/badge.svg)](https://github.com/Skyfound212/laporpkk/actions/workflows/eas-update.yml)
+
+Aplikasi internal Android untuk anggota PKK — Kelurahan Warakas.
 
 ## Fitur
 
@@ -24,7 +26,7 @@ Aplikasi internal Android untuk anggota PKK — Kelurahan Warakas .
 
 ```bash
 # Install dependencies
-npm install
+yarn install
 
 # Setup environment
 cp .env.example .env
@@ -36,12 +38,13 @@ npx expo start
 
 ## Supabase Setup
 
-Jalankan migration SQL di Supabase SQL Editor (urut dari 001 sampai 009).
+Jalankan migration SQL di Supabase SQL Editor (urut dari 001 sampai terakhir).
 
 ## Arsitektur
 
 - **Frontend**: Expo Mobile → Supabase SDK langsung
 - **Backend**: Supabase (Auth + DB + Realtime + Storage)
+- **OTA Update**: EAS Update otomatis setiap push ke `main`
 - **Max Users**: 20 anggota PKK
 
 ## Warna
