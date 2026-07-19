@@ -104,10 +104,11 @@
     "updates": {
       "url": "https://u.expo.dev/d1e40f88-72f7-4d24-bf0f-d6041b48d0ae",
       "enabled": true,
-      "checkAutomatically": "ON_LOAD"
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
     },
     "runtimeVersion": {
-      "policy": "sdkVersion"
+      "policy": "appVersion"
     }
   }
 }
