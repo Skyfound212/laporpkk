@@ -872,10 +872,8 @@ Agenda" onPress={() => router.push('/agenda/detail' as any)} />
             </LinearGradient>
             <Text style={styles.updateTitle}>Pembaruan Tersedia</Text>
             <Text style={styles.updateBody}>
-              Versi terbaru PKK Digital telah tersedia dengan fitur{'
-'}
-              dan perbaikan terkini. Perbarui sekarang untuk{'
-'}
+              Versi terbaru PKK Digital telah tersedia dengan fitur{"\n"}
+              dan perbaikan terkini. Perbarui sekarang untuk{"\n"}
               mendapatkan pengalaman terbaik.
             </Text>
             <TouchableOpacity
