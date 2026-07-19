@@ -10,6 +10,12 @@ on:
       - '**.md'
       - '.gitignore'
       - 'assets/**'
+  workflow_dispatch:
+    inputs:
+      message:
+        description: 'Pesan OTA update'
+        required: false
+        default: 'Manual trigger — CI maintenance'
 
 jobs:
   update:
@@ -37,5 +43,6 @@ jobs:
         run: |
           eas update \
             --channel production \
-            --message "${{ github.event.head_commit.message }}" \
+            --message "${{ github.event.inputs.message || github.event.head_commit.message }}" \
             --auto
+
