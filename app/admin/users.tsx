@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, FlatList, RefreshControl, Alert, Modal, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, FlatList, RefreshControl, Alert, Modal, TextInput, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useState, useEffect, useCallback } from 'react';
@@ -13,6 +13,7 @@ interface UserItem {
   jabatan: string;
   no_hp: string;
   email?: string;
+  avatar_url?: string | null;
   status: string;
   created_at: string;
 }
@@ -44,7 +45,7 @@ export default function AdminUsersScreen() {
     try {
       let query = supabase
         .from('profiles')
-        .select('id, nik, nama, jabatan, no_hp, email, status, created_at')
+        .select('id, nik, nama, jabatan, no_hp, email, avatar_url, status, created_at')
         .order('created_at', { ascending: false });
 
       if (searchQuery.trim()) {
@@ -185,8 +186,12 @@ export default function AdminUsersScreen() {
   const renderItem = ({ item }: { item: UserItem }) => (
     <View className="bg-white rounded-2xl p-4 mb-3 shadow-sm border border-[#E8F6F3]">
       <View className="flex-row items-start">
-        <View className="w-10 h-10 rounded-full bg-[#7ECDC0] items-center justify-center mr-3">
-          <Text className="text-white font-bold">{item.nama.charAt(0).toUpperCase()}</Text>
+        <View className="w-10 h-10 rounded-full bg-[#7ECDC0] items-center justify-center mr-3 overflow-hidden">
+          {item.avatar_url ? (
+            <Image source={{ uri: item.avatar_url }} style={{ width: 40, height: 40, borderRadius: 20 }} resizeMode="cover" />
+          ) : (
+            <Text className="text-white font-bold">{item.nama.charAt(0).toUpperCase()}</Text>
+          )}
         </View>
         <View className="flex-1">
           <View className="flex-row justify-between items-start">
