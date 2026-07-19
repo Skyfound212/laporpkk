@@ -3,18 +3,23 @@ import { AppState, AppStateStatus } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { useChatStore } from '@/stores/chatStore';
 import { useAuthStore } from '@/stores/authStore';
-import { sendChatNotification } from '@/lib/notifications';
+// Push notifikasi chat sekarang ditangani server-side oleh Edge Function
+// chat-push-notification (supabase/functions/chat-push-notification/index.ts).
+// Client hanya bertanggung jawab untuk: increment unread badge di tab bar.
 import { GROUP_ROOM_ID, getAdminRoomId, isAdminRoom, getPrivateRoomId } from '@/lib/roomId';
 
 /**
  * useChatRealtime — Global realtime hook dipasang di root layout.
  *
- * - Mendengarkan INSERT baru di semua room yang relevan
- * - Increment unread hanya jika room tidak sedang aktif
- * - Kirim push notifikasi (agar muncul saat app background/tertutup)
- * - Insert in-app notification ke tabel notifications
+ * Tanggung jawab hook ini (client-side):
+ * - Mendengarkan INSERT baru di semua room yang relevan via Supabase Realtime
+ * - Increment badge unread di tab bar (chatStore) jika room tidak aktif
  * - Auto-reconnect saat app kembali foreground
- * - Admin mendapat notifikasi untuk SEMUA room admin personal
+ * - Admin mendapat increment untuk SEMUA room admin personal (admin-pkk-*)
+ *
+ * Push notifikasi (termasuk saat app tertutup) ditangani SEPENUHNYA oleh:
+ * → supabase/functions/chat-push-notification/index.ts (Edge Function)
+ * → dipanggil oleh Database Webhook trigger on_message_insert_push
  */
 export function useChatRealtime() {
   const { incrementUnread, activeRoomId } = useChatStore();
@@ -89,42 +94,10 @@ export function useChatRealtime() {
             senderNameCache.current.set(senderId, senderName);
           }
 
-          // ── Kirim push notifikasi + in-app notification ───────────────────
-          if (roomId === GROUP_ROOM_ID) {
-            await sendChatNotification(
-              currentUserId,
-              `${senderName} — Ruang Rumpi`,
-              content,
-              { route: '/chat/room', roomId: GROUP_ROOM_ID, roomName: 'Ruang Rumpi PKK', roomType: 'group' }
-            );
-          } else if (isAdminRoom(roomId)) {
-            // Pesan ke room admin personal
-            if (isAdminUser) {
-              // Admin menerima keluhan dari user
-              await sendChatNotification(
-                currentUserId,
-                `📩 ${senderName} — Keluhan`,
-                content,
-                { route: '/chat/room', roomId, roomName: `${senderName}`, roomType: 'admin', profileId: senderId }
-              );
-            } else {
-              // User menerima balasan admin
-              await sendChatNotification(
-                currentUserId,
-                'Admin PKK',
-                content,
-                { route: '/chat/room', roomId, roomName: 'Chat Admin PKK', roomType: 'admin' }
-              );
-            }
-          } else {
-            // Private chat
-            await sendChatNotification(
-              currentUserId,
-              `💬 ${senderName}`,
-              content,
-              { route: '/chat/room', roomId, roomName: senderName, roomType: 'private', profileId: senderId }
-            );
-          }
+          // Push notifikasi dikirim server-side oleh Edge Function
+          // chat-push-notification (aktif saat app terbuka maupun tertutup).
+          // Client hanya mengelola badge unread di tab bar (sudah ditangani
+          // incrementUnread di atas).
         }
       )
       .subscribe();
