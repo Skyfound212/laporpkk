@@ -69,6 +69,7 @@ export default function NotifikasiScreen() {
   const [loading, setLoading]             = useState(true);
   const [refreshing, setRefreshing]       = useState(false);
   const [markingAll, setMarkingAll]       = useState(false);
+  const [deletingAll, setDeletingAll]     = useState(false);
 
   // ── Fetch ────────────────────────────────────────────────────────────────────
 
@@ -225,7 +226,41 @@ export default function NotifikasiScreen() {
     }
   };
 
-  // ── Hapus notifikasi ─────────────────────────────────────────────────────────
+
+  // ── Hapus semua notifikasi ───────────────────────────────────────────────────
+
+  const deleteAll = () => {
+    if (notifications.length === 0) return;
+    Alert.alert(
+      'Hapus Semua Notifikasi',
+      'Seluruh riwayat notifikasi akan dihapus permanen. Lanjutkan?',
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Hapus Semua',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingAll(true);
+            try {
+              await supabase
+                .from('notifications')
+                .delete()
+                .eq('user_id', user!.id)
+                .not('type', 'in', '("chat","post")');
+              setNotifications([]);
+            } catch (err) {
+              console.error('Gagal hapus semua:', err);
+              Alert.alert('Gagal', 'Tidak dapat menghapus notifikasi. Coba lagi.');
+            } finally {
+              setDeletingAll(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // ── Hapus notifikasi satu per satu ──────────────────────────────────────────
 
   const deleteNotification = async (id: string) => {
     try {
@@ -312,17 +347,30 @@ export default function NotifikasiScreen() {
             </View>
           )}
         </View>
-        <TouchableOpacity
-          onPress={markAllAsRead}
-          disabled={markingAll || unreadCount === 0}
-          style={[styles.markAllBtn, unreadCount === 0 && { opacity: 0.4 }]}
-        >
-          {markingAll ? (
-            <ActivityIndicator size="small" color="#2E9F95" />
-          ) : (
-            <Text style={styles.markAllText}>Tandai semua</Text>
-          )}
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <TouchableOpacity
+            onPress={markAllAsRead}
+            disabled={markingAll || unreadCount === 0}
+            style={[styles.markAllBtn, unreadCount === 0 && { opacity: 0.4 }]}
+          >
+            {markingAll ? (
+              <ActivityIndicator size="small" color="#2E9F95" />
+            ) : (
+              <Text style={styles.markAllText}>Tandai semua</Text>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={deleteAll}
+            disabled={deletingAll || notifications.length === 0}
+            style={[styles.deleteAllBtn, notifications.length === 0 && { opacity: 0.4 }]}
+          >
+            {deletingAll ? (
+              <ActivityIndicator size="small" color="#EF4444" />
+            ) : (
+              <Text style={styles.deleteAllText}>Hapus semua</Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* List */}
@@ -499,5 +547,16 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  deleteAllBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: '#FEF2F2',
+  },
+  deleteAllText: {
+    fontSize: 12,
+    color: '#EF4444',
+    fontWeight: '600',
   },
 });
