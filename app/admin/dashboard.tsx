@@ -324,7 +324,6 @@ export default function AdminDashboardScreen() {
                   Tindakan ini akan menghapus permanen:{' '}
                   Pesan chat, Notifikasi, Postingan, Laporan, Aduan, Agenda, Arsip, dan Log aktivitas.{' '}
                   <Text className="font-semibold text-[#2D3436]">Data akun anggota tidak akan terpengaruh.</Text>
-                </Text>
               </Text>
               <Text className="text-sm font-semibold text-[#2D3436] mb-2">Ketik <Text className="text-[#EF4444]">HAPUS</Text> untuk konfirmasi:</Text>
               <TextInput
