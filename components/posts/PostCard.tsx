@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
@@ -10,6 +10,7 @@ interface PostCardProps {
   userId: string;
   userName: string;
   userJabatan: string;
+  avatarUrl?: string | null;
   content: string;
   category: string;
   likesCount: number;
@@ -22,6 +23,7 @@ export function PostCard({
   userId,
   userName,
   userJabatan,
+  avatarUrl,
   content,
   category,
   likesCount,
@@ -72,11 +74,19 @@ export function PostCard({
       <View className="flex-row items-center mb-3">
         <TouchableOpacity
           onPress={() => router.push({ pathname: '/profile/other', params: { id: userId } })}
-          className="w-10 h-10 rounded-full bg-[#7ECDC0] items-center justify-center mr-3"
+          className="w-10 h-10 rounded-full bg-[#7ECDC0] items-center justify-center mr-3 overflow-hidden"
         >
-          <Text className="text-white font-bold text-sm">
-            {userName.charAt(0).toUpperCase()}
-          </Text>
+          {avatarUrl ? (
+            <Image
+              source={{ uri: avatarUrl }}
+              style={{ width: 40, height: 40, borderRadius: 20 }}
+              resizeMode="cover"
+            />
+          ) : (
+            <Text className="text-white font-bold text-sm">
+              {userName.charAt(0).toUpperCase()}
+            </Text>
+          )}
         </TouchableOpacity>
         <View className="flex-1">
           <Text className="font-semibold text-[#2D3436] text-sm">{userName}</Text>
