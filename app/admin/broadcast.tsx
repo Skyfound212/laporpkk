@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
+import { GROUP_ROOM_ID } from '@/lib/roomId';
 
 export default function AdminBroadcastScreen() {
   const router = useRouter();
@@ -20,9 +21,10 @@ export default function AdminBroadcastScreen() {
 
     setLoading(true);
     try {
-      // Insert broadcast message to admin-pkk room as system message
+      // Broadcast dikirim ke Ruang Rumpi (GROUP_ROOM_ID) sebagai pesan sistem
+      // agar semua anggota bisa melihatnya di satu tempat
       const { error } = await supabase.from('messages').insert({
-        room_id: 'admin-pkk',
+        room_id: GROUP_ROOM_ID,
         sender_id: 'system',
         content: `[BROADCAST] ${title}: ${message}`,
         type: 'system',
@@ -97,7 +99,7 @@ value={message}
         <View className="bg-[#E8F6F3] rounded-xl p-4 flex-row items-start">
           <Ionicons name="information-circle" size={20} color="#5DB9AA" />
           <Text className="text-sm text-[#5DB9AA] ml-2 flex-1">
-            Pesan broadcast akan muncul di Chat Admin dan notifikasi push (jika aktif).
+            Pesan broadcast akan muncul di Ruang Rumpi sebagai pengumuman sistem.
           </Text>
         </View>
       </View>

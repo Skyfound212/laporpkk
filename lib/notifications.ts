@@ -165,22 +165,6 @@ export async function sendSystemNotification(
   ]);
 }
 
-/** Notifikasi agenda berjalan/akan datang.
- *  Wajib push ke perangkat agar muncul meski app tertutup.
- */
-export async function sendAgendaNotification(
-  userId: string,
-  title: string,
-  body: string,
-  agendaId: string,
-): Promise<void> {
-  const data = { type: 'agenda', agendaId, route: '/agenda' };
-  await Promise.all([
-    sendPushNotification(userId, title, body, data),
-    insertInAppNotification(userId, title, body, 'agenda', data),
-  ]);
-}
-
 /** Notifikasi pembaruan aplikasi (OTA).
  *  Tap di lonceng → restart app untuk menerapkan update.
  *  Wajib push ke perangkat.
@@ -220,5 +204,24 @@ export async function sendAgendaNotification(
   ]);
 }
 
-// Catatan: sendChatMessageNotification dihapus —
-// notifikasi pesan chat tidak masuk lonceng sistem.
+/**
+ * Kirim push notifikasi untuk pesan chat baru.
+ * Push ke perangkat (agar muncul saat app background/tertutup) +
+ * tulis ke tabel notifications (lonceng in-app).
+ *
+ * @param toUserId  - ID user penerima
+ * @param title     - Judul notifikasi (mis. "💬 Siti Rahayu")
+ * @param body      - Isi singkat pesan
+ * @param data      - Data navigasi (roomId, roomType, dll)
+ */
+export async function sendChatNotification(
+  toUserId: string,
+  title: string,
+  body: string,
+  data: Record<string, any> = {}
+): Promise<void> {
+  await Promise.all([
+    sendPushNotification(toUserId, title, body, { type: 'chat', ...data }),
+    insertInAppNotification(toUserId, title, body, 'chat', data),
+  ]);
+}

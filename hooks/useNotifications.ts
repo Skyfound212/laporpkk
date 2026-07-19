@@ -8,7 +8,7 @@ import {
   addNotificationResponseListener,
   removeNotificationSubscription,
 } from '@/lib/notifications';
-import { GROUP_ROOM_ID, ADMIN_ROOM_ID } from '@/lib/roomId';
+import { GROUP_ROOM_ID, isAdminRoom } from '@/lib/roomId';
 
 export function useNotifications() {
   const router = useRouter();
@@ -67,14 +67,14 @@ export function useNotifications() {
         let roomType: string = data.roomType ?? 'private';
         let profileId: string | undefined = data.profileId ?? undefined;
 
+        // Tentukan tipe room dari roomId jika tidak tersedia di data
         if (roomId === GROUP_ROOM_ID) {
-          roomName = 'Ruang Rumpi';
+          roomName = roomName || 'Ruang Rumpi PKK';
           roomType = 'group';
           profileId = undefined;
-        } else if (roomId === ADMIN_ROOM_ID) {
-          roomName = 'Admin PKK';
+        } else if (isAdminRoom(roomId)) {
+          roomName = roomName || 'Chat Admin PKK';
           roomType = 'admin';
-          profileId = undefined;
         }
 
         safeNavigate(() =>
@@ -90,13 +90,6 @@ export function useNotifications() {
       } else if (data?.type === 'agenda') {
         safeNavigate(() =>
           router.push({ pathname: '/agenda/detail', params: { id: data.agendaId } })
-        );
-      } else if (data?.type === 'admin') {
-        safeNavigate(() =>
-          router.push({
-            pathname: '/chat/room',
-            params: { id: ADMIN_ROOM_ID, name: 'Admin PKK', type: 'admin' },
-          })
         );
       }
     });

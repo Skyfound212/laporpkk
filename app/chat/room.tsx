@@ -15,7 +15,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useChatStore } from '@/stores/chatStore';
 import { supabase } from '@/lib/supabase';
 import { TypingIndicator } from '@/components/chat/TypingIndicator';
-import { GROUP_ROOM_ID, ADMIN_ROOM_ID } from '@/lib/roomId';
+import { GROUP_ROOM_ID, isAdminRoom } from '@/lib/roomId';
 
 // ─── Tipe ─────────────────────────────────────────────────────────────────────
 
@@ -94,7 +94,7 @@ export default function ChatRoomScreen() {
   const { clearUnread, setActiveRoom } = useChatStore();
 
   const isGroup   = id === GROUP_ROOM_ID;
-  const isAdmin   = id === ADMIN_ROOM_ID;
+  const isAdmin   = isAdminRoom(id);   // personal: 'admin-pkk-{userId}'
   const isPrivate = !isGroup && !isAdmin;
 
   // ── State ─────────────────────────────────────────────────────────────────

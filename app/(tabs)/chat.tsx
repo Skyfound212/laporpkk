@@ -9,7 +9,7 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useAuthStore } from '@/stores/authStore';
 import { useChatStore } from '@/stores/chatStore';
 import { supabase } from '@/lib/supabase';
-import { getPrivateRoomId, GROUP_ROOM_ID, ADMIN_ROOM_ID } from '@/lib/roomId';
+import { getPrivateRoomId, GROUP_ROOM_ID, getAdminRoomId, isAdminRoom } from '@/lib/roomId';
 
 // ─── Tipe ─────────────────────────────────────────────────────────────────────
 
@@ -123,8 +123,15 @@ export default function ChatScreen() {
       const members = profiles ?? [];
 
       // 2. Room IDs
+      const isAdminUser = user.role === 'admin' || user.role === 'ketua';
       const privateRoomIds = members.map((m: any) => getPrivateRoomId(user.id, m.id));
-      const allRoomIds = [GROUP_ROOM_ID, ADMIN_ROOM_ID, ...privateRoomIds];
+      // Admin tidak punya room keluhan sendiri — keluhan user ada di admin-pkk-{userId}
+      const myAdminRoomId = isAdminUser ? null : getAdminRoomId(user.id);
+      const allRoomIds = [
+        GROUP_ROOM_ID,
+        ...(myAdminRoomId ? [myAdminRoomId] : []),
+        ...privateRoomIds,
+      ];
 
       // 3. Pesan terakhir per room (1 query, sorted desc, ambil first per room)
       // BUG FIX: query tanpa limit akan fetch SEMUA pesan (bisa ribuan row).
@@ -179,15 +186,23 @@ export default function ChatScreen() {
           lastMessageAt: lastMsgMap[GROUP_ROOM_ID]?.created_at,
           lastSenderId: lastMsgMap[GROUP_ROOM_ID]?.sender_id,
         },
-        {
-          id: ADMIN_ROOM_ID,
-          name: 'Chat Admin PKK',
-          subtitle: 'Pengaduan & bantuan',
-          type: 'admin',
-          lastMessage: lastContent(lastMsgMap[ADMIN_ROOM_ID]),
-          lastMessageAt: lastMsgMap[ADMIN_ROOM_ID]?.created_at,
-          lastSenderId: lastMsgMap[ADMIN_ROOM_ID]?.sender_id,
-        },
+        // Admin → entry ke inbox keluhan; Anggota → room keluhan pribadi
+        isAdminUser
+          ? {
+              id: 'admin-inbox',
+              name: 'Kotak Keluhan Anggota',
+              subtitle: 'Keluhan personal dari anggota',
+              type: 'admin' as const,
+            }
+          : {
+              id: getAdminRoomId(user.id),
+              name: 'Chat Admin PKK',
+              subtitle: 'Pengaduan & bantuan',
+              type: 'admin' as const,
+              lastMessage: lastContent(lastMsgMap[getAdminRoomId(user.id)]),
+              lastMessageAt: lastMsgMap[getAdminRoomId(user.id)]?.created_at,
+              lastSenderId: lastMsgMap[getAdminRoomId(user.id)]?.sender_id,
+            },
       ];
 
       const privateRooms: RoomItem[] = members.map((m: any) => {
@@ -243,7 +258,11 @@ export default function ChatScreen() {
 
           // Update room entry yang terdampak
           setRooms((prev) => {
-            const idx = prev.findIndex((r) => r.id === roomId);
+            // Untuk pesan di room admin personal → update entry admin-inbox atau room admin
+            const targetId = isAdminRoom(roomId)
+              ? (prev.find((r) => r.id === roomId)?.id ?? 'admin-inbox')
+              : roomId;
+            const idx = prev.findIndex((r) => r.id === targetId);
             if (idx === -1) return prev; // room tidak ada di list (bukan room relevan)
 
             const updated = { ...prev[idx] };
@@ -286,23 +305,32 @@ export default function ChatScreen() {
   const renderItem = ({ item }: { item: RoomItem }) => {
     const isOnline  = item.profileId ? onlineIds.has(item.profileId) : false;
     const isMe      = item.lastSenderId === user?.id;
-    const unread    = unreadPerRoom[item.id] ?? 0;
+    // Untuk admin-inbox, hitung total unread dari semua room admin-pkk-*
+    const unread = item.id === 'admin-inbox'
+      ? Object.entries(unreadPerRoom).filter(([k]) => isAdminRoom(k)).reduce((s, [, v]) => s + v, 0)
+      : (unreadPerRoom[item.id] ?? 0);
     const hasUnread = unread > 0;
     const hasMsg    = !!item.lastMessage;
 
+    const handlePress = () => {
+      if (item.id === 'admin-inbox') {
+        router.push('/chat/admin-inbox' as any);
+      } else {
+        router.push({
+          pathname: '/chat/room',
+          params: {
+            id: item.id,
+            name: item.name,
+            type: item.type,
+            profileId: item.profileId ?? '',
+          },
+        } as any);
+      }
+    };
+
     return (
       <TouchableOpacity
-        onPress={() =>
-          router.push({
-            pathname: '/chat/room',
-            params: {
-              id: item.id,
-              name: item.name,
-              type: item.type,
-              profileId: item.profileId ?? '',
-            },
-          } as any)
-        }
+        onPress={handlePress}
         activeOpacity={0.7}
         style={[
           styles.roomRow,

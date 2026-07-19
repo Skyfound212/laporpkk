@@ -1,25 +1,38 @@
 import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
-import { ADMIN_ROOM_ID } from '@/lib/roomId';
+import { useAuthStore } from '@/stores/authStore';
+import { getAdminRoomId } from '@/lib/roomId';
 
 /**
- * Chat Admin — cukup redirect ke room.tsx dengan room ID admin.
- * Semua logika (kirim pesan, realtime, dll) ada di room.tsx.
+ * Chat Admin — entry point berdasarkan role:
+ * - Admin/Ketua  → masuk ke inbox keluhan (daftar semua room admin personal)
+ * - Anggota biasa → masuk ke room admin personal miliknya sendiri
  */
 export default function ChatAdminScreen() {
   const router = useRouter();
+  const { user } = useAuthStore();
 
   useEffect(() => {
-    router.replace({
-      pathname: '/chat/room',
-      params: {
-        id: ADMIN_ROOM_ID,
-        name: 'Chat Admin PKK',
-        type: 'admin',
-        profileId: '',
-      },
-    } as any);
-  }, []);
+    if (!user) return;
+
+    const isAdmin = user.role === 'admin' || user.role === 'ketua';
+
+    if (isAdmin) {
+      // Admin melihat semua keluhan dari semua user
+      router.replace('/chat/admin-inbox' as any);
+    } else {
+      // Anggota biasa masuk ke room keluhan pribadinya
+      router.replace({
+        pathname: '/chat/room',
+        params: {
+          id: getAdminRoomId(user.id),
+          name: 'Chat Admin PKK',
+          type: 'admin',
+          profileId: '',
+        },
+      } as any);
+    }
+  }, [user]);
 
   return null;
 }

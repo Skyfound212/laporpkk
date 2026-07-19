@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useState, useEffect, useCallback } from 'react';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
+import { getAdminRoomId, isAdminRoom } from '@/lib/roomId';
 
 interface AduanItem {
   id: string;
@@ -23,19 +24,22 @@ export default function AdminAduanScreen() {
 
   const fetchAduan = useCallback(async () => {
     try {
+      // Query semua room admin personal (admin-pkk-{userId}) menggunakan ilike
       const { data, error } = await supabase
         .from('messages')
-        .select('id, sender_id, content, created_at, sender:profiles(nama, jabatan)')
-        .eq('room_id', 'admin-pkk')
+        .select('id, sender_id, content, created_at, type, sender:profiles(nama, jabatan)')
+        .ilike('room_id', 'admin-pkk-%')
         .eq('type', 'text')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(500);
 
       if (error) throw error;
 
-      // Group by sender, get latest message per sender
-      const grouped = new Map();
+      // Group by sender — ambil pesan terbaru per sender
+      const grouped = new Map<string, AduanItem>();
       (data || []).forEach((item: any) => {
         const senderId = item.sender_id;
+        if (senderId === 'system') return; // skip pesan sistem
         if (!grouped.has(senderId)) {
           grouped.set(senderId, {
             id: item.id,
@@ -61,19 +65,17 @@ export default function AdminAduanScreen() {
   useEffect(() => {
     fetchAduan();
 
-    // Real-time subscription
+    // Realtime: dengarkan INSERT di tabel messages, filter JS-side untuk room admin-pkk-*
+    // (Supabase realtime filter tidak support ilike/like, jadi filter di sini)
     const subscription = supabase
-      .channel('admin-aduan')
+      .channel('admin-aduan-realtime')
       .on(
         'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `room_id=eq.admin-pkk`,
-        },
-        () => {
-          fetchAduan();
+        { event: 'INSERT', schema: 'public', table: 'messages' },
+        (payload) => {
+          const msg = payload.new as any;
+          if (!isAdminRoom(msg.room_id)) return; // abaikan bukan room admin
+          fetchAduan(); // re-fetch untuk update grouped list
         }
       )
       .subscribe();
@@ -100,7 +102,17 @@ export default function AdminAduanScreen() {
 
   const renderItem = ({ item }: { item: AduanItem }) => (
     <TouchableOpacity
-      onPress={() => router.push({ pathname: '/chat/room', params: { id: item.sender_id } })}
+      onPress={() =>
+        router.push({
+          pathname: '/chat/room',
+          params: {
+            id: getAdminRoomId(item.sender_id),
+            name: item.sender_name,
+            type: 'admin',
+            profileId: item.sender_id,
+          },
+        } as any)
+      }
       className="bg-white rounded-2xl p-4 mb-3 shadow-sm border border-[#E8F6F3]"
     >
       <View className="flex-row items-center">
@@ -131,24 +143,35 @@ export default function AdminAduanScreen() {
       {/* Header */}
       <View className="bg-white px-4 pt-4 pb-3 border-b border-[#E8F6F3]">
         <Text className="text-2xl font-bold text-[#2D3436]">Aduan Anggota</Text>
-        <Text className="text-sm text-[#636E72] mt-0.5">Pesan masuk dari anggota PKK</Text>
+        <Text className="text-sm text-[#636E72] mt-0.5">Pesan keluhan personal dari anggota PKK</Text>
       </View>
 
-      <FlatList
-        data={aduan}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.sender_id}
-        contentContainerClassName="px-4 py-4"
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchAduan(); }} />
-        }
-        ListEmptyComponent={() => (
-          <View className="items-center py-16">
-            <MaterialIcons name="chat-bubble-outline" size={56} color="#E8F6F3" />
-            <Text className="text-[#636E72] mt-3">Belum ada aduan</Text>
-          </View>
-        )}
-      />
+      {loading ? (
+        <View className="flex-1 items-center justify-center">
+          <MaterialIcons name="chat-bubble-outline" size={36} color="#7ECDC0" />
+        </View>
+      ) : (
+        <FlatList
+          data={aduan}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.sender_id}
+          contentContainerClassName="px-4 py-4"
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => { setRefreshing(true); fetchAduan(); }}
+              tintColor="#7ECDC0"
+              colors={['#7ECDC0']}
+            />
+          }
+          ListEmptyComponent={() => (
+            <View className="items-center py-16">
+              <MaterialIcons name="chat-bubble-outline" size={56} color="#E8F6F3" />
+              <Text className="text-[#636E72] mt-3">Belum ada aduan</Text>
+            </View>
+          )}
+        />
+      )}
     </SafeAreaView>
   );
 }
