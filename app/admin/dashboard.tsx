@@ -321,12 +321,10 @@ export default function AdminDashboardScreen() {
               </View>
               <Text className="text-xl font-bold text-[#2D3436] text-center mb-2">Reset Data Testing</Text>
               <Text className="text-sm text-[#636E72] text-center mb-5 leading-5">
-                Tindakan ini akan menghapus permanen:{'
-'}
-                Pesan chat, Notifikasi, Postingan, Laporan, Aduan, Agenda, Arsip, dan Log aktivitas.{'
-
-'}
-                <Text className="font-semibold text-[#2D3436]">Data akun anggota tidak akan terpengaruh.</Text>
+                  Tindakan ini akan menghapus permanen:{' '}
+                  Pesan chat, Notifikasi, Postingan, Laporan, Aduan, Agenda, Arsip, dan Log aktivitas.{' '}
+                  <Text className="font-semibold text-[#2D3436]">Data akun anggota tidak akan terpengaruh.</Text>
+                </Text>
               </Text>
               <Text className="text-sm font-semibold text-[#2D3436] mb-2">Ketik <Text className="text-[#EF4444]">HAPUS</Text> untuk konfirmasi:</Text>
               <TextInput
