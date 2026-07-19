@@ -127,19 +127,24 @@ export default function ChatScreen() {
       const allRoomIds = [GROUP_ROOM_ID, ADMIN_ROOM_ID, ...privateRoomIds];
 
       // 3. Pesan terakhir per room (1 query, sorted desc, ambil first per room)
+      // BUG FIX: query tanpa limit akan fetch SEMUA pesan (bisa ribuan row).
+      // Kita hanya butuh pesan terakhir per room — 300 baris cukup untuk semua room.
       const { data: lastMsgs } = await supabase
         .from('messages')
         .select('room_id, content, created_at, sender_id, type, sender_name')
         .in('room_id', allRoomIds)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(300);
 
       // 4. Unread messages (is_read = false, bukan dari saya)
+      // BUG FIX: tambahkan limit agar tidak fetch ribuan row unread
       const { data: unreadMsgs } = await supabase
         .from('messages')
         .select('room_id')
         .in('room_id', allRoomIds)
         .neq('sender_id', user.id)
-        .eq('is_read', false);
+        .eq('is_read', false)
+        .limit(500);
 
       // 5. Map lastMsg per room (first occurrence = latest)
       const lastMsgMap: Record<string, any> = {};
@@ -352,7 +357,7 @@ export default function ChatScreen() {
         <View>
           <Text style={styles.headerTitle}>Pesan</Text>
           <Text style={styles.headerSub}>
-            {onlineIds.size > 0 ? `${onlineIds.size} anggota online` : 'Chat anggota PKK'}
+            {onlineIds.size > 1 ? `${onlineIds.size - 1} anggota online` : 'Chat anggota PKK'}
           </Text>
         </View>
         <TouchableOpacity style={styles.headerIcon} onPress={fetchRooms}>

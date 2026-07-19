@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View, Text, Image, TextInput, TouchableOpacity, FlatList,
   KeyboardAvoidingView, Platform, Alert, AppState, AppStateStatus,
@@ -225,9 +225,11 @@ export default function ChatRoomScreen() {
     clearUnread(id);
   }, [messages, user?.id, id, clearUnread]);
 
-  // Tandai saat pesan berubah
+  // Tandai hanya jika memang ada pesan belum dibaca (hindari query berlebihan)
   useEffect(() => {
-    if (messages.length > 0) markAllRead();
+    if (messages.length === 0) return;
+    const hasUnread = messages.some((m) => m.sender_id !== user?.id && !m.is_read);
+    if (hasUnread) markAllRead();
   }, [messages.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Realtime subscription ─────────────────────────────────────────────────
@@ -361,9 +363,13 @@ export default function ChatRoomScreen() {
       appStateRef.current = next;
     });
 
+    // BUG FIX: NetInfo fires immediately on mount (state = current network).
+    // Gunakan ref agar tidak double-fetch saat mount awal.
+    let netInitialized = false;
     const netUnsub = NetInfo.addEventListener((state) => {
       const online = state.isConnected ?? true;
       setIsOnline(online);
+      if (!netInitialized) { netInitialized = true; return; } // skip fire pertama
       if (online) { subscribeChannel(); fetchMessages(); }
     });
 
@@ -491,11 +497,17 @@ export default function ChatRoomScreen() {
     const dist = contentSize.height - layoutMeasurement.height - contentOffset.y;
     isAtBottomRef.current = dist < 80;
     setShowScrollBtn(dist > 200);
+    // BUG FIX: onEndReached fires di BAWAH (pesan terbaru), bukan di atas (pesan lama).
+    // Deteksi scroll mendekati ATAS untuk muat pesan lebih lama.
+    if (contentOffset.y < 120 && !loadingMore && hasMore && messages.length > 0) {
+      loadOlderMessages();
+    }
   };
 
   // ── Render helpers ────────────────────────────────────────────────────────
 
-  const listItems = buildListItems(messages);
+  // Memoize agar tidak rebuild setiap render
+  const listItems = useMemo(() => buildListItems(messages), [messages]);
 
   const renderDateSep = (label: string) => (
     <View style={styles.dateSepWrap}>
@@ -670,7 +682,7 @@ export default function ChatRoomScreen() {
             {!isOnline
               ? '⚠️ Tidak ada koneksi'
               : isGroup
-              ? `${Object.keys(channelRef.current?.presenceState() ?? {}).length} online`
+              ? `${Math.max(0, Object.keys(channelRef.current?.presenceState() ?? {}).length - 1)} online`
               : isAdmin
               ? 'Admin PKK'
               : otherOnline
@@ -690,8 +702,8 @@ export default function ChatRoomScreen() {
       {/* Konten */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={0}
+        behavior="padding"
+        keyboardVerticalOffset={Platform.OS === 'android' ? 24 : 0}
       >
         <View style={{ flex: 1 }}>
           <FlatList
@@ -705,8 +717,8 @@ export default function ChatRoomScreen() {
             keyboardShouldPersistTaps="handled"
             removeClippedSubviews={Platform.OS === 'android'}
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-            onEndReached={loadOlderMessages}
-            onEndReachedThreshold={0.15}
+            // onEndReached sengaja dihapus — ia trigger di BAWAH (pesan terbaru).
+            // Load pesan lama dideteksi di handleScroll saat scroll ke ATAS.
             ListHeaderComponent={
               loadingMore ? (
                 <View style={{ alignItems: 'center', paddingVertical: 10 }}>
