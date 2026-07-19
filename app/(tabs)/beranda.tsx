@@ -430,7 +430,9 @@ export default function BerandaScreen() {
       .from('notifications')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', user.id)
-      .eq('is_read', false);
+      .eq('is_read', false)
+      // Konsisten dengan layar notifikasi — chat/post tidak masuk lonceng
+      .not('type', 'in', '("chat","post")');
 
     if (!error) setUnreadCount(count ?? 0);
   };

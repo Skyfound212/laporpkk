@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import * as Updates from 'expo-updates';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase';
 
@@ -29,13 +30,13 @@ interface NotificationItem {
 
 // ─── Helper ────────────────────────────────────────────────────────────────────
 
+// Hanya tipe notifikasi sistem yang ditampilkan di lonceng
 const TYPE_META: Record<string, { icon: keyof typeof Ionicons.glyphMap; color: string; bg: string }> = {
-  laporan:    { icon: 'document-text',     color: '#2E9F95', bg: '#DFF4F2' },
+  laporan:    { icon: 'document-text',      color: '#2E9F95', bg: '#DFF4F2' },
   agenda:     { icon: 'calendar',           color: '#7C3AED', bg: '#EDE9FE' },
-  chat:       { icon: 'chatbubbles',        color: '#2563EB', bg: '#DBEAFE' },
-  post:       { icon: 'newspaper',          color: '#D97706', bg: '#FEF3C7' },
-  app_update: { icon: 'download',           color: '#059669', bg: '#D1FAE5' },
-  system:     { icon: 'information-circle', color: '#6366F1', bg: '#EEF2FF' },
+  update:     { icon: 'arrow-down-circle',  color: '#0284C7', bg: '#E0F2FE' },
+  app_update: { icon: 'arrow-down-circle',  color: '#0284C7', bg: '#E0F2FE' },
+  system:     { icon: 'shield-checkmark',   color: '#059669', bg: '#D1FAE5' },
   general:    { icon: 'notifications',      color: '#6B7280', bg: '#F3F4F6' },
 };
 
@@ -78,6 +79,8 @@ export default function NotifikasiScreen() {
         .from('notifications')
         .select('id, title, body, type, data, is_read, created_at')
         .eq('user_id', user.id)
+        // Hanya notifikasi sistem — pesan chat tidak masuk lonceng
+        .not('type', 'in', '("chat","post")')
         .order('created_at', { ascending: false })
         .limit(50);
 
@@ -94,6 +97,23 @@ export default function NotifikasiScreen() {
   useEffect(() => {
     fetchNotifications();
   }, [fetchNotifications]);
+
+  // ── Auto-dismiss badge: tandai semua dibaca saat layar terbuka ───────────────
+
+  useEffect(() => {
+    if (loading) return;                                   // tunggu data selesai
+    const unreadIds = notifications.filter((n) => !n.is_read).map((n) => n.id);
+    if (unreadIds.length === 0) return;
+
+    // Mark read di background — badge di beranda hilang otomatis via realtime
+    supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .in('id', unreadIds)
+      .then(() => {
+        setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+      });
+  }, [loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Real-time subscription ───────────────────────────────────────────────────
 
@@ -159,8 +179,24 @@ export default function NotifikasiScreen() {
     }
   };
 
-  const navigateByType = (item: NotificationItem) => {
-    const { data } = item;
+  const navigateByType = async (item: NotificationItem) => {
+    const { type, data } = item;
+
+    // Notif update → restart app untuk terapkan OTA
+    if (type === 'update' || type === 'app_update') {
+      if (!__DEV__) {
+        try {
+          await Updates.reloadAsync();
+        } catch {
+          Alert.alert('Gagal', 'Tidak dapat memuat ulang aplikasi. Coba tutup dan buka kembali.');
+        }
+      } else {
+        Alert.alert('Mode Dev', 'Restart app tidak tersedia di mode development.');
+      }
+      return;
+    }
+
+    // Notif lain → navigasi berdasarkan data.route
     if (data?.route) {
       router.push(data.route as any);
     }
@@ -248,9 +284,9 @@ export default function NotifikasiScreen() {
   const ListEmpty = () => (
     <View style={styles.emptyWrap}>
       <MaterialIcons name="notifications-none" size={72} color="#DFF4F2" />
-      <Text style={styles.emptyTitle}>Belum ada notifikasi baru</Text>
+      <Text style={styles.emptyTitle}>Belum ada notifikasi</Text>
       <Text style={styles.emptySubtitle}>
-        Notifikasi tentang laporan, agenda, dan chat akan muncul di sini.
+        Pembaruan sistem, agenda berjalan, dan status laporan akan muncul di sini.
       </Text>
     </View>
   );

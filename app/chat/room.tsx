@@ -14,7 +14,6 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { useAuthStore } from '@/stores/authStore';
 import { useChatStore } from '@/stores/chatStore';
 import { supabase } from '@/lib/supabase';
-import { sendChatMessageNotification } from '@/lib/notifications';
 import { TypingIndicator } from '@/components/chat/TypingIndicator';
 import { GROUP_ROOM_ID, ADMIN_ROOM_ID } from '@/lib/roomId';
 
@@ -433,18 +432,6 @@ export default function ChatRoomScreen() {
         )
       );
 
-      // Notifikasi push untuk private chat
-      if (isPrivate && profileId) {
-        sendChatMessageNotification(
-          profileId,
-          user.nama ?? 'Anggota PKK',
-          text,
-          id,
-          name,
-          'private',
-          user.id,
-        );
-      }
     } catch (err: any) {
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       Alert.alert('Gagal mengirim', err.message || 'Periksa koneksi internet Anda');

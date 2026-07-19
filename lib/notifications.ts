@@ -146,7 +146,11 @@ export async function setBadgeCount(count: number) {
 
 // ─── Notifikasi Sistem ────────────────────────────────────────────────────────
 
-/** Notifikasi sistem umum (pengumuman, peringatan platform) */
+// ─── Notifikasi Sistem (push ke perangkat + masuk lonceng) ───────────────────
+
+/** Notifikasi sistem umum (pengumuman, peringatan platform).
+ *  Wajib push ke perangkat agar muncul meski app tertutup.
+ */
 export async function sendSystemNotification(
   userId: string,
   title: string,
@@ -154,12 +158,33 @@ export async function sendSystemNotification(
   data: Record<string, any> = {}
 ): Promise<void> {
   await Promise.all([
-    sendLocalNotification(title, body, { type: 'system', ...data }),
+    // Push ke perangkat via Expo Push Service
+    sendPushNotification(userId, title, body, { type: 'system', ...data }),
+    // Simpan di lonceng in-app
     insertInAppNotification(userId, title, body, 'system', data),
   ]);
 }
 
-/** Notifikasi pembaruan aplikasi */
+/** Notifikasi agenda berjalan/akan datang.
+ *  Wajib push ke perangkat agar muncul meski app tertutup.
+ */
+export async function sendAgendaNotification(
+  userId: string,
+  title: string,
+  body: string,
+  agendaId: string,
+): Promise<void> {
+  const data = { type: 'agenda', agendaId, route: '/agenda' };
+  await Promise.all([
+    sendPushNotification(userId, title, body, data),
+    insertInAppNotification(userId, title, body, 'agenda', data),
+  ]);
+}
+
+/** Notifikasi pembaruan aplikasi (OTA).
+ *  Tap di lonceng → restart app untuk menerapkan update.
+ *  Wajib push ke perangkat.
+ */
 export async function sendAppUpdateNotification(
   userId: string,
   newVersion: string,
@@ -167,96 +192,16 @@ export async function sendAppUpdateNotification(
 ): Promise<void> {
   const title = `🔔 Pembaruan PKK Digital v${newVersion}`;
   const body = releaseNotes;
+  const data = { type: 'app_update', version: newVersion, action: 'restart_app' };
   await Promise.all([
-    sendLocalNotification(title, body, { type: 'app_update', version: newVersion }),
-    insertInAppNotification(userId, title, body, 'app_update', { version: newVersion }),
+    sendPushNotification(userId, title, body, data),
+    insertInAppNotification(userId, title, body, 'app_update', data),
   ]);
-}
-
-/** Notifikasi pesan baru dari pengguna lain (dengan nama pengirim) */
-export async function sendChatMessageNotification(
-  toUserId: string,
-  senderName: string,
-  messagePreview: string,
-  roomId: string,
-  roomName?: string,
-  roomType?: string,
-  senderProfileId?: string,
-): Promise<void> {
-  const title = `💬 Pesan baru dari ${senderName}`;
-  const body = messagePreview.length > 80 ? messagePreview.slice(0, 77) + '...' : messagePreview;
-  await sendPushNotification(toUserId, title, body, {
-    type: 'chat',
-    roomId,
-    roomName: roomName ?? senderName,
-    roomType: roomType ?? 'private',
-    profileId: senderProfileId ?? '',
-  });
-}
-
-
-// ─── Notifikasi Post Baru ke Semua User ──────────────────────────────────────
-
-/** Kirim notif ke semua user aktif saat ada postingan baru (lonceng + push) */
-export async function sendPostNotificationToAll(
-  authorId: string,
-  authorName: string,
-  postContent: string,
-  postId: string
-): Promise<void> {
-  try {
-    // Ambil semua user aktif kecuali penulis
-    const { data: users } = await supabase
-      .from('profiles')
-      .select('id')
-      .neq('id', authorId)
-      .eq('status', 'active');
-
-    if (!users || users.length === 0) return;
-
-    const title = `📝 Update baru dari ${authorName}`;
-    const body = postContent.length > 80 ? postContent.slice(0, 77) + '...' : postContent;
-
-    // Tulis ke tabel notifications (ikon lonceng) untuk tiap user
-    await supabase.from('notifications').insert(
-      users.map((u) => ({
-        user_id: u.id,
-        title,
-        body,
-        type: 'post',
-        data: { postId, route: `/post/detail?id=${postId}` },
-      }))
-    );
-
-    // Kirim push ke perangkat masing-masing
-    const { data: tokens } = await supabase
-      .from('push_tokens')
-      .select('token')
-      .in('user_id', users.map((u) => u.id));
-
-    if (!tokens || tokens.length === 0) return;
-
-    await fetch('https://exp.host/--/api/v2/push/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify(
-        tokens.map((t: any) => ({
-          to: t.token,
-          sound: 'default',
-          title,
-          body,
-          data: { type: 'post', postId },
-        }))
-      ),
-    });
-  } catch (err) {
-    console.error('Error sending post notification:', err);
-  }
 }
 
 // ─── Notifikasi Agenda ────────────────────────────────────────────────────────
 
-/** Notif agenda sedang berlangsung / akan datang (lonceng + push lokal) */
+/** Notif agenda sedang berlangsung / akan datang — wajib push ke perangkat */
 export async function sendAgendaNotification(
   userId: string,
   agendaTitle: string,
@@ -267,12 +212,13 @@ export async function sendAgendaNotification(
     ? '📅 Agenda sedang berlangsung'
     : '🔔 Agenda akan segera dimulai';
   const body = agendaTitle;
+  const data = { type: 'agenda', agendaId, route: `/agenda/detail?id=${agendaId}` };
 
   await Promise.all([
-    sendLocalNotification(title, body, { type: 'agenda', agendaId }),
-    insertInAppNotification(userId, title, body, 'agenda', {
-      agendaId,
-      route: `/agenda/detail?id=${agendaId}`,
-    }),
+    sendPushNotification(userId, title, body, data),
+    insertInAppNotification(userId, title, body, 'agenda', data),
   ]);
 }
+
+// Catatan: sendChatMessageNotification dihapus —
+// notifikasi pesan chat tidak masuk lonceng sistem.
