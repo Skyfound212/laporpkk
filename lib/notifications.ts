@@ -4,12 +4,18 @@ import * as Device from 'expo-device';
 import { supabase } from './supabase';
 
 // Configure notification behavior
+// Chat: tidak tampilkan banner/suara saat foreground (badge tab sudah cukup).
+// Sistem / agenda / update: tampilkan alert + suara + badge seperti biasa.
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
+  handleNotification: async (notification) => {
+    const data = notification.request.content.data as Record<string, any>;
+    const isChat = data?.type === 'chat';
+    return {
+      shouldShowAlert: !isChat,  // chat → tidak muncul dari atas saat foreground
+      shouldPlaySound: !isChat,  // chat → tidak berbunyi saat foreground
+      shouldSetBadge: true,      // badge app icon selalu update
+    };
+  },
 });
 
 export async function registerForPushNotificationsAsync(userId: string): Promise<string | null> {
@@ -206,8 +212,11 @@ export async function sendAgendaNotification(
 
 /**
  * Kirim push notifikasi untuk pesan chat baru.
- * Push ke perangkat (agar muncul saat app background/tertutup) +
- * tulis ke tabel notifications (lonceng in-app).
+ *
+ * - Push ke perangkat via Expo Push API → muncul saat app background/tertutup.
+ * - TIDAK ditulis ke tabel notifications (lonceng) — chat bukan notif sistem.
+ * - Badge unread chat dikelola oleh chatStore (tab bar), bukan lonceng.
+ * - Saat app foreground, banner TIDAK muncul (dikendalikan setNotificationHandler).
  *
  * @param toUserId  - ID user penerima
  * @param title     - Judul notifikasi (mis. "💬 Siti Rahayu")
@@ -220,8 +229,6 @@ export async function sendChatNotification(
   body: string,
   data: Record<string, any> = {}
 ): Promise<void> {
-  await Promise.all([
-    sendPushNotification(toUserId, title, body, { type: 'chat', ...data }),
-    insertInAppNotification(toUserId, title, body, 'chat', data),
-  ]);
+  // Hanya push ke perangkat — TIDAK insertInAppNotification (bukan lonceng)
+  await sendPushNotification(toUserId, title, body, { type: 'chat', ...data });
 }
