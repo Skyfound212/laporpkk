@@ -38,6 +38,9 @@ export default function AdminDashboardScreen() {
   const [currentCode, setCurrentCode] = useState('');
   const [newCode, setNewCode] = useState('');
   const [savingCode, setSavingCode] = useState(false);
+  const [resetModalVisible, setResetModalVisible] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetConfirmText, setResetConfirmText] = useState('');
 
   const handleExitAdmin = () => {
     lockAdminGate();
@@ -55,6 +58,37 @@ export default function AdminDashboardScreen() {
       setNewCode('');
     } else {
       Alert.alert('Gagal', result.error || 'Gagal mengubah kode akses');
+    }
+  };
+
+
+  const handleResetData = async () => {
+    if (resetConfirmText !== 'HAPUS') {
+      Alert.alert('Konfirmasi Salah', 'Ketik HAPUS untuk melanjutkan.');
+      return;
+    }
+    setResetting(true);
+    try {
+      // Hapus semua data testing — profiles/users tetap aman
+      await Promise.all([
+        supabase.from('messages').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+        supabase.from('notifications').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+        supabase.from('post_likes').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+        supabase.from('posts').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+        supabase.from('laporan').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+        supabase.from('aduan').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+        supabase.from('agenda').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+        supabase.from('arsip_dokumen').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+        supabase.from('user_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+      ]);
+      setResetModalVisible(false);
+      setResetConfirmText('');
+      await fetchStats();
+      Alert.alert('Berhasil', 'Semua data testing telah dihapus. Akun anggota tetap aman.');
+    } catch (err: any) {
+      Alert.alert('Gagal', err.message || 'Terjadi kesalahan saat menghapus data.');
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -266,6 +300,66 @@ export default function AdminDashboardScreen() {
             </View>
           </View>
         </View>
+
+        {/* Reset Data Testing */}
+        <View className="px-4 pb-4">
+          <TouchableOpacity
+            onPress={() => { setResetConfirmText(''); setResetModalVisible(true); }}
+            className="flex-row items-center justify-center bg-[#FEF2F2] border border-[#FECACA] rounded-2xl py-3.5 px-4"
+          >
+            <Ionicons name="trash-bin" size={18} color="#EF4444" />
+            <Text className="text-[#EF4444] font-semibold ml-2">Reset Data Testing</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Reset Modal */}
+        <Modal visible={resetModalVisible} transparent animationType="fade" onRequestClose={() => setResetModalVisible(false)}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+            <View className="bg-white rounded-3xl p-6 w-full">
+              <View className="w-14 h-14 rounded-full bg-[#FEF2F2] items-center justify-center mb-4 self-center">
+                <Ionicons name="warning" size={28} color="#EF4444" />
+              </View>
+              <Text className="text-xl font-bold text-[#2D3436] text-center mb-2">Reset Data Testing</Text>
+              <Text className="text-sm text-[#636E72] text-center mb-5 leading-5">
+                Tindakan ini akan menghapus permanen:{'
+'}
+                Pesan chat, Notifikasi, Postingan, Laporan, Aduan, Agenda, Arsip, dan Log aktivitas.{'
+
+'}
+                <Text className="font-semibold text-[#2D3436]">Data akun anggota tidak akan terpengaruh.</Text>
+              </Text>
+              <Text className="text-sm font-semibold text-[#2D3436] mb-2">Ketik <Text className="text-[#EF4444]">HAPUS</Text> untuk konfirmasi:</Text>
+              <TextInput
+                value={resetConfirmText}
+                onChangeText={setResetConfirmText}
+                placeholder="HAPUS"
+                placeholderTextColor="#D1D5DB"
+                autoCapitalize="characters"
+                className="border border-[#E5E7EB] rounded-xl px-4 py-3 text-base text-[#2D3436] mb-4"
+              />
+              <View className="flex-row gap-3">
+                <TouchableOpacity
+                  onPress={() => { setResetModalVisible(false); setResetConfirmText(''); }}
+                  className="flex-1 py-3 rounded-xl border border-[#E5E7EB] items-center"
+                >
+                  <Text className="font-semibold text-[#636E72]">Batal</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleResetData}
+                  disabled={resetting || resetConfirmText !== 'HAPUS'}
+                  className="flex-1 py-3 rounded-xl items-center"
+                  style={{ backgroundColor: resetConfirmText === 'HAPUS' ? '#EF4444' : '#FCA5A5' }}
+                >
+                  {resetting ? (
+                    <ActivityIndicator size="small" color="white" />
+                  ) : (
+                    <Text className="font-semibold text-white">Hapus Semua</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {/* Recent Activity */}
         <View className="px-4 pb-6">
